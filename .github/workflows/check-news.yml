@@ -38,6 +38,7 @@ jobs:
           HEYCHAT_TOKEN: ${{ secrets.HEYCHAT_TOKEN }}
           ROOM_ID: ${{ secrets.ROOM_ID }}
           CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           # 可选配置（不设置则用默认值）:
           # DRY_RUN: "0"
           # MAX_MSG_LEN: "1500"
