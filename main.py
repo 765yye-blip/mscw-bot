@@ -25,6 +25,8 @@ MapleStory Classic World（冒险岛美服怀旧服）公告推送机器人
   AUTHOR_NAME                   显示的作者名（默认 Classic World Announcement）
   RETRY_TIMES                   列表最高 id 未前进时的重试次数, 含首次（默认 3）
   RETRY_WAIT                    每次重试等待秒数（默认 90）
+  TERMS_FILE                    美服->国服术语表 JSON 路径（默认 ./terms.json）
+  TERMS_EXTRA_FILE              扩展术语表路径, 可选（默认 ./terms_extra.json）
   DISPLAY_TIMEZONE              展示发布时间所用时区（默认 Asia/Shanghai 北京时间）
 """
 
@@ -59,6 +61,45 @@ AUTHOR_NAME = os.environ.get("AUTHOR_NAME", "Classic World Announcement")
 RETRY_TIMES = int(os.environ.get("RETRY_TIMES", "3"))   # 总尝试次数, 含首次
 RETRY_WAIT = int(os.environ.get("RETRY_WAIT", "90"))    # 每次重试等待秒数
 DISPLAY_TZ = timezone(timedelta(hours=8))  # 北京时间
+
+# ---- 国服术语表: 美服英文 -> 国服《冒险岛》官方中文译名 ----
+# terms.json 可自行增删, 翻译前按词边界强制替换(长的优先),
+# 确保职业/技能/道具/现金道具等专有名词使用国服叫法
+TERMS_FILE = os.environ.get(
+    "TERMS_FILE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "terms.json")
+)
+# 扩展术语表(社区词表, 由 build_terms_extra.py 从《常用词.txt》生成, 可选)
+TERMS_EXTRA_FILE = os.environ.get(
+    "TERMS_EXTRA_FILE",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "terms_extra.json"),
+)
+
+
+def _load_terms_file(path: str, required: bool = False) -> dict:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return {k: v for k, v in data.items() if not str(k).startswith("_")}
+    except Exception as e:
+        if required:
+            print(f"[warn] 术语表加载失败({path}): {e}, 跳过术语替换", flush=True)
+        else:
+            print(f"[info] 扩展术语表不可用({path}): {e}", flush=True)
+        return {}
+
+
+# 合并顺序: 扩展表为基础, 主表覆盖(用户 terms.json 优先)
+TERMS = _load_terms_file(TERMS_EXTRA_FILE)
+TERMS.update(_load_terms_file(TERMS_FILE, required=True))
+
+
+def apply_terms(text: str) -> str:
+    """把美服英文术语替换为国服冒险岛中文译名(词边界匹配, 长词优先)。"""
+    if not TERMS:
+        return text
+    for en in sorted(TERMS, key=len, reverse=True):
+        text = re.sub(r"(?<![\w])" + re.escape(en) + r"(?![\w])", TERMS[en], text)
+    return text
 
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -339,8 +380,11 @@ def _deepseek_call(texts, tl="zh-CN"):
         "要求：\n"
         "1. 输出一个与输入等长的 JSON 字符串数组，第 i 个元素是第 i 项的译文；\n"
         "2. 只输出 JSON 数组本身，不要任何解释、不要 Markdown 代码块标记；\n"
-        "3. 译文要自然通顺，保留原文的换行符、数字、网址和专有名词；\n"
-        f"4. 如果某项原文已经是{target}，原样保留。\n\n"
+        "3. 译文要自然通顺，保留原文的换行符、数字和网址；\n"
+        f"4. 如果某项原文已经是{target}，原样保留。\n"
+        "5. 游戏专有名词（职业、技能、道具、装备、现金道具、地图、NPC、活动名等）"
+        "优先采用国服《冒险岛》官方简体中文译名（如 Hero=英雄、Paladin=圣骑士、"
+        "Cash Shop=商城、Meso=金币），不要自创译名或逐词直译。\n\n"
         + json.dumps(texts, ensure_ascii=False)
     )
     payload = {
@@ -435,17 +479,17 @@ HEADING_OVERRIDES = {
 def translate_blocks(blocks):
     """翻译所有块里的文本；返回新的块列表。翻译失败时保留原文。
     段落按行拆分翻译（多时区段落每行独立判断, 时间行保留英文原文）。"""
-    # 收集翻译单元: (block_index, 位置描述, 文本)
+    # 收集翻译单元: (block_index, 位置描述, 文本) 文本已套用国服术语替换
     units = []  # (bi, kind, line_idx_or_None, text)
     for bi, blk in enumerate(blocks):
         if blk[0] == "heading":
-            units.append((bi, "heading", None, blk[1]))
+            units.append((bi, "heading", None, apply_terms(blk[1])))
         elif blk[0] == "para":
             for li, line in enumerate(blk[1].split("\n")):
-                units.append((bi, "para", li, line))
+                units.append((bi, "para", li, apply_terms(line)))
         elif blk[0] == "list":
             for ii, item in enumerate(blk[1]):
-                units.append((bi, "list", ii, item))
+                units.append((bi, "list", ii, apply_terms(item)))
 
     if units:
         # 小标题优先使用固定译法（Google 对孤立短语翻译不准）
@@ -672,8 +716,8 @@ def main():
     # 4) 解析 + 翻译 + 排版
     blocks = classify_blocks(parse_body(detail.get("body") or ""))
     try:
-        title_tr = _translate_deepseek_batch([latest["name"]])
-        title_cn = title_tr[0] if title_tr else latest["name"]
+        title_tr = _translate_deepseek_batch([apply_terms(latest["name"])])
+        title_cn = title_tr[0] if title_tr else apply_terms(latest["name"])
     except Exception:
         title_cn = latest["name"]
     latest["title_cn"] = title_cn
