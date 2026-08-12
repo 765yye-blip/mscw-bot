@@ -510,7 +510,9 @@ def translate_blocks(blocks):
                 units.append((bi, "list", ii, item, apply_terms(item)))
 
     # 决定哪些需要翻译: 时间行/网址/已含中文行基于"原始文本"直接保留;
-    # 其余默认用"术语替换后文本"(至少术语已译), 交给翻译服务处理剩余英文
+    # 其余默认用"术语替换后文本"(至少术语已译), 交给翻译服务处理剩余英文。
+    # 注意: 替换后已不含英文字母的行(纯中文术语/数字/符号)不再送翻译引擎,
+    #       避免中文术语被翻译服务二次加工(如 风之前跃 -> 风先于跃)
     tr_map = {}
     need_units = []  # (bi, kind, li, 待翻译文本)
     for (b, k, li, raw, rep) in units:
@@ -520,12 +522,14 @@ def translate_blocks(blocks):
                 tr_map[(b, k, li)] = ov
             else:
                 tr_map[(b, k, li)] = rep
-                need_units.append((b, k, li, rep))
+                if re.search(r"[A-Za-z]", rep):
+                    need_units.append((b, k, li, rep))
         elif _should_keep_original(raw):
             tr_map[(b, k, li)] = raw
         else:
             tr_map[(b, k, li)] = rep
-            need_units.append((b, k, li, rep))
+            if re.search(r"[A-Za-z]", rep):
+                need_units.append((b, k, li, rep))
 
     if need_units:
         need_texts = [u[3] for u in need_units]
@@ -736,15 +740,19 @@ def main():
 
     # 4) 解析 + 翻译 + 排版
     blocks = classify_blocks(parse_body(detail.get("body") or ""))
-    try:
-        title_tr = _translate_deepseek_batch([apply_terms(latest["name"])])
-        if title_tr:
-            title_cn = title_tr[0]
-        else:
-            # DeepSeek 不可用时用 Google 兜底(标题短, 单条很快)
-            title_cn = _translate_google_batch([apply_terms(latest["name"])], force=True)[0]
-    except Exception:
-        title_cn = apply_terms(latest["name"])
+    title_rep = apply_terms(latest["name"])
+    if not re.search(r"[A-Za-z]", title_rep):
+        title_cn = title_rep          # 术语替换后已是纯中文, 不再送翻译引擎
+    else:
+        try:
+            title_tr = _translate_deepseek_batch([title_rep])
+            if title_tr:
+                title_cn = title_tr[0]
+            else:
+                # DeepSeek 不可用时用 Google 兜底(标题短, 单条很快)
+                title_cn = _translate_google_batch([title_rep], force=True)[0]
+        except Exception:
+            title_cn = title_rep
     latest["title_cn"] = title_cn
     blocks = translate_blocks(blocks)
 
