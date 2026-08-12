@@ -473,47 +473,54 @@ HEADING_OVERRIDES = {
     "Fixed Issues:": "已修复问题：",
     "How to Participate:": "参与方式：",
     "Rewards:": "奖励：",
+    "Common:": "通用：",
+    "Common": "通用",
 }
 
 
 def translate_blocks(blocks):
     """翻译所有块里的文本；返回新的块列表。翻译失败时保留原文。
-    段落按行拆分翻译（多时区段落每行独立判断, 时间行保留英文原文）。"""
-    # 收集翻译单元: (block_index, 位置描述, 文本) 文本已套用国服术语替换
-    units = []  # (bi, kind, line_idx_or_None, text)
+    段落按行拆分翻译（多时区段落每行独立判断, 时间行保留英文原文）。
+    术语替换(国服译名)发生在翻译前; "是否保留原文"的判断基于替换前的原始文本,
+    避免术语混入中文后整行被误判为"已翻译"而跳过（导致半中半英）。"""
+    # 收集翻译单元: (block_index, 位置描述, 原始文本, 术语替换后文本)
+    units = []
     for bi, blk in enumerate(blocks):
         if blk[0] == "heading":
-            units.append((bi, "heading", None, apply_terms(blk[1])))
+            units.append((bi, "heading", None, blk[1], apply_terms(blk[1])))
         elif blk[0] == "para":
             for li, line in enumerate(blk[1].split("\n")):
-                units.append((bi, "para", li, apply_terms(line)))
+                units.append((bi, "para", li, line, apply_terms(line)))
         elif blk[0] == "list":
             for ii, item in enumerate(blk[1]):
-                units.append((bi, "list", ii, apply_terms(item)))
+                units.append((bi, "list", ii, item, apply_terms(item)))
 
-    if units:
-        # 小标题优先使用固定译法（Google 对孤立短语翻译不准）
-        override_texts = []
-        for (b, k, li, t) in units:
-            if k == "heading":
-                override_texts.append(HEADING_OVERRIDES.get(t.strip(), None))
-            else:
-                override_texts.append(None)
-        tr_map = {}
-        for (b, k, li, t), ov in zip(units, override_texts):
+    # 决定哪些需要翻译: 时间行/网址/已含中文行基于"原始文本"直接保留;
+    # 其余默认用"术语替换后文本"(至少术语已译), 交给翻译服务处理剩余英文
+    tr_map = {}
+    need_units = []  # (bi, kind, li, 待翻译文本)
+    for (b, k, li, raw, rep) in units:
+        if k == "heading":
+            ov = HEADING_OVERRIDES.get(raw.strip(), None)
             if ov is not None:
                 tr_map[(b, k, li)] = ov
-        need_units = [(b, k, li, t) for (b, k, li, t), ov in zip(units, override_texts) if ov is None]
-        if need_units:
-            need_texts = [u[3] for u in need_units]
-            # 优先 DeepSeek 批量翻译（国内直连、快）; 失败则逐条走 Google
-            translated = _translate_deepseek_batch(need_texts)
-            if translated is None:
-                translated = _translate_google_batch(need_texts)
-            for (b, k, li, _t), tr in zip(need_units, translated):
-                tr_map[(b, k, li)] = tr
-    else:
-        tr_map = {}
+            else:
+                tr_map[(b, k, li)] = rep
+                need_units.append((b, k, li, rep))
+        elif _should_keep_original(raw):
+            tr_map[(b, k, li)] = raw
+        else:
+            tr_map[(b, k, li)] = rep
+            need_units.append((b, k, li, rep))
+
+    if need_units:
+        need_texts = [u[3] for u in need_units]
+        # 优先 DeepSeek 批量翻译（国内直连、快）; 失败则逐条走 Google
+        translated = _translate_deepseek_batch(need_texts)
+        if translated is None:
+            translated = _translate_google_batch(need_texts, force=True)
+        for (b, k, li, _rep), tr in zip(need_units, translated):
+            tr_map[(b, k, li)] = tr
 
     # 用翻译结果重建块: 建立 (bi, kind, li) -> 翻译文本 的映射
     new_blocks = []
@@ -717,9 +724,13 @@ def main():
     blocks = classify_blocks(parse_body(detail.get("body") or ""))
     try:
         title_tr = _translate_deepseek_batch([apply_terms(latest["name"])])
-        title_cn = title_tr[0] if title_tr else apply_terms(latest["name"])
+        if title_tr:
+            title_cn = title_tr[0]
+        else:
+            # DeepSeek 不可用时用 Google 兜底(标题短, 单条很快)
+            title_cn = _translate_google_batch([apply_terms(latest["name"])], force=True)[0]
     except Exception:
-        title_cn = latest["name"]
+        title_cn = apply_terms(latest["name"])
     latest["title_cn"] = title_cn
     blocks = translate_blocks(blocks)
 
