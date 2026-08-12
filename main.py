@@ -705,6 +705,10 @@ def content_hash(article: dict, detail: dict) -> str:
 # ---------------------------------------------------------------------------
 def main():
     print(f"[info] 开始检查 (DRY_RUN={'是' if DRY_RUN else '否'})", flush=True)
+    if DEEPSEEK_API_KEY and DEEPSEEK_API_KEY != "XXX":
+        print("[info] 翻译后端: DeepSeek (已配置 API key)", flush=True)
+    else:
+        print("[info] 翻译后端: Google 兜底 (未配置 DEEPSEEK_API_KEY)", flush=True)
 
     # 3) 去重状态（提前加载, 供重试判断用）
     state = load_state()
