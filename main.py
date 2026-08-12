@@ -181,7 +181,7 @@ class _BodyParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.blocks = []
         self._cur = None          # 当前段落字符列表
-        self._list = None         # 当前列表项数组
+        self._lists = []          # 列表栈(支持嵌套 ul/li, 收尾时展平为单个 list 块)
         self._li = None           # 当前列表项字符列表
         self._in_li = False
         self._skip = 0            # 图片内部跳过计数
@@ -206,8 +206,8 @@ class _BodyParser(HTMLParser):
     def _flush_li(self):
         if self._li is not None:
             text = self._finalize(self._li)
-            if text and self._list is not None:
-                self._list.append(text)
+            if text and self._lists:
+                self._lists[-1].append(text)
             self._li = None
 
     # ---- 事件 ----
@@ -234,7 +234,7 @@ class _BodyParser(HTMLParser):
             self.blocks.append(("divider", ""))
         elif tag in ("ul", "ol"):
             self._flush_para()
-            self._list = []
+            self._lists.append([])
         elif tag == "li":
             self._flush_li()
             self._li = []
@@ -261,10 +261,12 @@ class _BodyParser(HTMLParser):
         elif tag in ("ul", "ol"):
             self._flush_li()
             self._in_li = False
-            if self._list is not None:
-                if self._list:
-                    self.blocks.append(("list", self._list))
-                self._list = None
+            if self._lists:
+                done = self._lists.pop()        # 当前层
+                if self._lists:
+                    self._lists[-1].extend(done)  # 嵌套列表展平到父层
+                elif done:
+                    self.blocks.append(("list", done))
 
     def handle_startendtag(self, tag, attrs):
         # 自闭合标签 <img/> <br/> 等
@@ -279,9 +281,17 @@ class _BodyParser(HTMLParser):
     def handle_data(self, data):
         if self._skip > 0:
             return
-        buf = self._li if self._in_li else self._cur
-        if buf is not None:
-            buf.append(data)
+        if self._in_li:
+            if self._li is not None:
+                self._li.append(data)
+            return
+        # 段外裸文本(如 <div>/<td> 里未用 <p> 包裹的文本)自动开段收集, 避免丢失
+        if self._cur is None:
+            if data.strip():
+                self._cur = []
+            else:
+                return
+        self._cur.append(data)
 
 
 def parse_body(body_html: str):
@@ -300,8 +310,12 @@ def parse_body(body_html: str):
         p._flush_para()
     if p._li is not None:
         p._flush_li()
-    if p._list is not None and p._list:
-        p.blocks.append(("list", p._list))
+    while p._lists:
+        done = p._lists.pop()
+        if p._lists:
+            p._lists[-1].extend(done)
+        elif done:
+            p.blocks.append(("list", done))
     return p.blocks
 
 
