@@ -15,12 +15,16 @@ MapleStory Classic World（冒险岛美服怀旧服）公告推送机器人
   HEYCHAT_TOKEN                 黑盒语音机器人 token（推送时必填）
   ROOM_ID                       房间 ID（推送时必填）
   CHANNEL_ID                    频道 ID（推送时必填）
+  DEEPSEEK_API_KEY              DeepSeek API 密钥（翻译必填，国内直连、速度快）
+  DEEPSEEK_MODEL                DeepSeek 模型名（默认 deepseek-v4-flash）
   DRY_RUN                       1 = 只打印排版结果不推送（默认 0）
   STATE_FILE                    状态文件路径（默认 ./state.json）
   MAX_MSG_LEN                   单条消息最大长度, 超出自动拆成多条（默认 1500）
   PUSH_ON_CONTENT_UPDATE        1 = 同一条公告内容有更新也重新推送（默认 1）
   NEWS_API_BASE                 Nexon CMS API（默认 https://g.nexonstatic.com/maplestory/cms/v1）
   AUTHOR_NAME                   显示的作者名（默认 Classic World Announcement）
+  RETRY_TIMES                   列表最高 id 未前进时的重试次数, 含首次（默认 3）
+  RETRY_WAIT                    每次重试等待秒数（默认 90）
   DISPLAY_TIMEZONE              展示发布时间所用时区（默认 Asia/Shanghai 北京时间）
 """
 
@@ -41,6 +45,8 @@ from html.parser import HTMLParser
 HEYCHAT_TOKEN = os.environ.get("HEYCHAT_TOKEN", "")
 ROOM_ID = os.environ.get("ROOM_ID", "")
 CHANNEL_ID = os.environ.get("CHANNEL_ID", "")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
 DRY_RUN = os.environ.get("DRY_RUN", "0") == "1"
 STATE_FILE = os.environ.get("STATE_FILE", "state.json")
 MAX_MSG_LEN = int(os.environ.get("MAX_MSG_LEN", "1500"))
@@ -49,6 +55,9 @@ NEWS_API_BASE = os.environ.get(
     "NEWS_API_BASE", "https://g.nexonstatic.com/maplestory/cms/v1"
 )
 AUTHOR_NAME = os.environ.get("AUTHOR_NAME", "Classic World Announcement")
+# API 源站同步滞后时（官网先显示、API 后同步）的运行内重试
+RETRY_TIMES = int(os.environ.get("RETRY_TIMES", "3"))   # 总尝试次数, 含首次
+RETRY_WAIT = int(os.environ.get("RETRY_WAIT", "90"))    # 每次重试等待秒数
 DISPLAY_TZ = timezone(timedelta(hours=8))  # 北京时间
 
 UA = (
@@ -63,7 +72,14 @@ DIVIDER = "──────────────────"  # 黑盒语�
 # 网络请求
 # ---------------------------------------------------------------------------
 def http_get(url: str, timeout: int = 20) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": UA,
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+        },
+    )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read().decode("utf-8", errors="replace")
 
@@ -85,9 +101,14 @@ def http_post_json(url: str, payload: dict, headers: dict, timeout: int = 20):
 def fetch_latest_news():
     """返回最新一条怀旧服公告的 dict（含 id/name/liveDate/category）。"""
     items = []
+    # 加时间戳参数, 尝试绕过边缘缓存(实测: 源站同步延迟无法靠参数绕过,
+    # 真正的兜底是 main() 里的运行内重试)
     for ep in ("/news", "/archived"):
         try:
-            items.extend(http_get_json(NEWS_API_BASE + ep))
+            url = NEWS_API_BASE + ep
+            sep = "&" if "?" in url else "?"
+            url = f"{url}{sep}_t={int(time.time())}"
+            items.extend(http_get_json(url))
         except Exception as e:
             print(f"[warn] 拉取 {ep} 失败: {e}", flush=True)
     if not items:
@@ -261,7 +282,7 @@ def classify_blocks(blocks):
 
 
 # ---------------------------------------------------------------------------
-# 3. 翻译（Google 免费接口, 批量; 失败兜底 MyMemory; 时间行保留原文）
+# 3. 翻译（DeepSeek 批量翻译, 国内直连快; 失败兜底 Google; 时间行保留原文）
 # ---------------------------------------------------------------------------
 # 看起来像时间/时区信息、数字、网址的行 -> 不翻译（保持原文排版）
 _TIME_LINE_RE = re.compile(
@@ -283,6 +304,90 @@ def _should_keep_original(line: str) -> bool:
     if len(line.strip()) <= 60 and _TIME_LINE_RE.search(line):
         return True
     return False
+
+
+def _translate_deepseek_batch(texts, tl="zh-CN"):
+    """用 DeepSeek 一次批量翻译多条文本（国内直连, 快）。
+    文本过多时自动分批（每批最多 20 条），避免输出超长被截断。
+    返回与输入等长的译文列表; 失败返回 None（由调用方兜底）。
+    时间/网址/已含中文的短行在调用前已被 _should_keep_original 过滤。"""
+    if not (DEEPSEEK_API_KEY and DEEPSEEK_API_KEY != "XXX") or not texts:
+        return None
+
+    # 分批调用, 每批 20 条, 合并结果
+    results = [None] * len(texts)
+    BATCH = 20
+    for start in range(0, len(texts), BATCH):
+        chunk = texts[start:start + BATCH]
+        chunk_tr = _deepseek_call(chunk, tl)
+        if chunk_tr is None:
+            return None
+        results[start:start + BATCH] = chunk_tr
+    return results
+
+
+def _deepseek_call(texts, tl="zh-CN"):
+    """对一批文本调用一次 DeepSeek, 返回等长译文列表; 失败返回 None。"""
+    lang_map = {
+        "zh-CN": "简体中文", "zh-TW": "繁体中文", "en": "英文",
+        "ja": "日文", "ko": "韩文", "ru": "俄文", "fr": "法文",
+        "de": "德文", "es": "西班牙文",
+    }
+    target = lang_map.get(tl, "简体中文")
+    prompt = (
+        f"你是专业翻译。请把下面 JSON 数组中的每一项文本翻译成{target}。\n"
+        "要求：\n"
+        "1. 输出一个与输入等长的 JSON 字符串数组，第 i 个元素是第 i 项的译文；\n"
+        "2. 只输出 JSON 数组本身，不要任何解释、不要 Markdown 代码块标记；\n"
+        "3. 译文要自然通顺，保留原文的换行符、数字、网址和专有名词；\n"
+        f"4. 如果某项原文已经是{target}，原样保留。\n\n"
+        + json.dumps(texts, ensure_ascii=False)
+    )
+    payload = {
+        "model": DEEPSEEK_MODEL,
+        "messages": [
+            {"role": "system", "content": "你是专业翻译助手，只输出要求的 JSON 数组。"},
+            {"role": "user", "content": prompt},
+        ],
+        "max_tokens": 8192,
+        "temperature": 0.3,
+        "stream": False,
+    }
+    try:
+        req = urllib.request.Request(
+            "https://api.deepseek.com/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + DEEPSEEK_API_KEY,
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        content = data["choices"][0]["message"]["content"]
+        # 鲁棒解析: 先整段试 json.loads, 失败再提取首个 [...] 块
+        arr = None
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, list):
+                arr = parsed
+        except Exception:
+            pass
+        if arr is None:
+            m = re.search(r"\[.*\]", content, re.S)
+            if m:
+                try:
+                    arr = json.loads(m.group(0))
+                except Exception:
+                    arr = None
+        if not isinstance(arr, list) or len(arr) != len(texts):
+            print(f"[warn] DeepSeek 返回条数不符: {len(arr) if isinstance(arr, list) else '?'} != {len(texts)}", flush=True)
+            return None
+        return [str(x) if x is not None else t for x, t in zip(arr, texts)]
+    except Exception as e:
+        print(f"[warn] DeepSeek 翻译失败: {e}", flush=True)
+        return None
 
 
 def _translate_google(text: str, tl="zh-CN") -> str:
@@ -356,7 +461,11 @@ def translate_blocks(blocks):
                 tr_map[(b, k, li)] = ov
         need_units = [(b, k, li, t) for (b, k, li, t), ov in zip(units, override_texts) if ov is None]
         if need_units:
-            translated = _translate_google_batch([u[3] for u in need_units])
+            need_texts = [u[3] for u in need_units]
+            # 优先 DeepSeek 批量翻译（国内直连、快）; 失败则逐条走 Google
+            translated = _translate_deepseek_batch(need_texts)
+            if translated is None:
+                translated = _translate_google_batch(need_texts)
             for (b, k, li, _t), tr in zip(need_units, translated):
                 tr_map[(b, k, li)] = tr
     else:
@@ -528,15 +637,28 @@ def content_hash(article: dict, detail: dict) -> str:
 def main():
     print(f"[info] 开始检查 (DRY_RUN={'是' if DRY_RUN else '否'})", flush=True)
 
+    # 3) 去重状态（提前加载, 供重试判断用）
+    state = load_state()
+    pushed_id = state.get("pushed_id")
+
     # 1) 最新公告
-    latest = fetch_latest_news()
+    #    Nexon CMS API 源站同步可能滞后（官网网页先显示、API 后同步）:
+    #    若列表最高 id 与已推送一致, 等待 RETRY_WAIT 秒重拉, 最多 RETRY_TIMES 次
+    latest = None
+    for attempt in range(1, RETRY_TIMES + 1):
+        latest = fetch_latest_news()
+        if str(latest["id"]) != pushed_id:
+            break
+        if attempt < RETRY_TIMES:
+            print(f"[info] 列表最高仍是 id={latest['id']}（疑似 API 源站同步滞后）, "
+                  f"等待 {RETRY_WAIT}s 重试 ({attempt + 1}/{RETRY_TIMES})", flush=True)
+            time.sleep(RETRY_WAIT)
+
     # 2) 详情
     detail = fetch_news_detail(latest["id"])
     h = content_hash(latest, detail)
 
     # 3) 去重判断
-    state = load_state()
-    pushed_id = state.get("pushed_id")
     pushed_hash = state.get("pushed_hash")
     if pushed_id == str(latest["id"]):
         if pushed_hash == h:
@@ -550,7 +672,8 @@ def main():
     # 4) 解析 + 翻译 + 排版
     blocks = classify_blocks(parse_body(detail.get("body") or ""))
     try:
-        title_cn = _translate_google_batch([latest["name"]], force=True)[0]
+        title_tr = _translate_deepseek_batch([latest["name"]])
+        title_cn = title_tr[0] if title_tr else latest["name"]
     except Exception:
         title_cn = latest["name"]
     latest["title_cn"] = title_cn
