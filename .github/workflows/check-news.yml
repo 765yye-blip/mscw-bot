@@ -27,11 +27,12 @@ jobs:
         # v5 基于 Node 24, 消除 "Node.js 20 is deprecated" 警告
         uses: actions/checkout@v5
 
-      - name: Validate terms.json syntax
-        # 术语表文件损坏时直接让工作流失败, 避免带着空术语表推送"瞎翻版"
+      - name: Validate terms.json + self-test
+        # 离线冒烟自检(术语表语法/解析/时间行/拆条), 任一失败直接让工作流失败,
+        # 防止带损坏术语表或回归代码推送"瞎翻版"
         run: |
-          python -c "import json; json.load(open('terms.json', encoding='utf-8'))"
-          echo "terms.json 语法 OK"
+          python main.py --self-test
+          echo "冒烟自检 OK"
 
       - name: Run news checker
         env:
