@@ -207,7 +207,8 @@ class _BodyParser(HTMLParser):
         if self._li is not None:
             text = self._finalize(self._li)
             if text and self._lists:
-                self._lists[-1].append(text)
+                # 列表项存 (文本, 嵌套层级), 层级用于排版时按官网格式缩进
+                self._lists[-1].append((text, len(self._lists) - 1))
             self._li = None
 
     # ---- 事件 ----
@@ -233,6 +234,7 @@ class _BodyParser(HTMLParser):
             self._flush_para()
             self.blocks.append(("divider", ""))
         elif tag in ("ul", "ol"):
+            self._flush_li()          # 先把父 li 的文本收进父列表(否则会被塞进嵌套层)
             self._flush_para()
             self._lists.append([])
         elif tag == "li":
@@ -507,7 +509,8 @@ def translate_blocks(blocks):
                 units.append((bi, "para", li, line, apply_terms(line)))
         elif blk[0] == "list":
             for ii, item in enumerate(blk[1]):
-                units.append((bi, "list", ii, item, apply_terms(item)))
+                it = item[0] if isinstance(item, tuple) else item
+                units.append((bi, "list", ii, it, apply_terms(it)))
 
     # 决定哪些需要翻译: 时间行/网址/已含中文行基于"原始文本"直接保留;
     # 其余默认用"术语替换后文本"(至少术语已译), 交给翻译服务处理剩余英文。
@@ -553,7 +556,12 @@ def translate_blocks(blocks):
         elif blk[0] == "list":
             items = list(blk[1])
             for ii in range(len(items)):
-                items[ii] = tr_map.get((bi, "list", ii), items[ii])
+                tr = tr_map.get((bi, "list", ii))
+                if tr is not None:
+                    if isinstance(items[ii], tuple):
+                        items[ii] = (tr, items[ii][1])   # 保留嵌套层级
+                    else:
+                        items[ii] = tr
             new_blocks.append(("list", items))
         else:
             new_blocks.append(blk)
@@ -619,8 +627,16 @@ def build_message_parts(article: dict, blocks) -> list:
                 if line and not _NOISE_LINE_RE.match(line):
                     parts.append(line)
         elif kind == "list":
+            # 列表项打包成一个整体(内部用 \n 连接), 按官网嵌套层级缩进
+            lines = []
             for item in blk[1]:
-                parts.append(f"• {fix_bold_balance(clean_markdown(item))}")
+                if isinstance(item, tuple):
+                    text, depth = item
+                else:
+                    text, depth = item, 0
+                lines.append("  " * depth + "• " + fix_bold_balance(clean_markdown(text)))
+            if lines:
+                parts.append("\n".join(lines))
         elif kind == "divider":
             parts.append(DIVIDER)
 
