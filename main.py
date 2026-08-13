@@ -627,14 +627,16 @@ def build_message_parts(article: dict, blocks) -> list:
                 if line and not _NOISE_LINE_RE.match(line):
                     parts.append(line)
         elif kind == "list":
-            # 列表项打包成一个整体(内部用 \n 连接), 按官网嵌套层级缩进
+            # 列表项打包成一个整体。项间用 Markdown 硬换行(行尾两个空格+\n):
+            # 黑盒语音里单 \n 会被当作空格(列表挤成一行), 空行 \n\n 又会被分成独立段落,
+            # 行尾双空格是"紧凑但强制换行"的唯一方式。
             lines = []
             for item in blk[1]:
                 if isinstance(item, tuple):
                     text, depth = item
                 else:
                     text, depth = item, 0
-                lines.append("  " * depth + "• " + fix_bold_balance(clean_markdown(text)))
+                lines.append("  " * depth + "• " + fix_bold_balance(clean_markdown(text)) + "  ")
             if lines:
                 parts.append("\n".join(lines))
         elif kind == "divider":
