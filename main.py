@@ -101,7 +101,7 @@ TERMS_EXTRA_FILE = os.environ.get(
 )
 
 
-def _load_terms_file(path: str, required: bool = False) -> dict:
+def _load_terms_file(path: str, required: bool = False, quiet: bool = False) -> dict:
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -109,13 +109,14 @@ def _load_terms_file(path: str, required: bool = False) -> dict:
     except Exception as e:
         if required:
             print(f"[warn] 术语表加载失败({path}): {e}, 跳过术语替换", flush=True)
-        else:
-            print(f"[info] 扩展术语表不可用({path}): {e}", flush=True)
+        elif not quiet:
+            print(f"[warn] 术语表加载失败({path}): {e}", flush=True)
         return {}
 
 
 # 合并顺序: 扩展表为基础, 主表覆盖(用户 terms.json 优先)
-TERMS = _load_terms_file(TERMS_EXTRA_FILE)
+# 扩展表默认路径不存在属正常(未部署社区词表), 静默不刷屏; 显式配置了却读不到才提示
+TERMS = _load_terms_file(TERMS_EXTRA_FILE, quiet=not bool(os.environ.get("TERMS_EXTRA_FILE")))
 TERMS.update(_load_terms_file(TERMS_FILE, required=True))
 
 
@@ -448,15 +449,14 @@ def _should_keep_original(line: str) -> bool:
 
 def _translate_deepseek_batch(texts, tl="zh-CN"):
     """用 DeepSeek 一次批量翻译多条文本（国内直连, 快）。
-    初始每批 20 条; 输出过长被截断导致解析失败时, 自动把批次减半重试,
-    避免长文公告整体退回 Google 逐条翻译。返回与输入等长的译文列表;
-    仍失败返回 None（由调用方兜底）。
+    止损策略: 最多降批 1 次(20 -> 10)。"返回条数不符"说明是输出格式问题,
+    降批到 5/2 结果相同, 只会浪费数十秒重试(线上实测 3 次降批白耗 ~3 分钟);
+    而截断场景 10 条一般足够。仍失败返回 None 由调用方转 Google 兜底。
     时间/网址/已含中文的短行在调用前已被 _should_keep_original 过滤。"""
     if not (DEEPSEEK_API_KEY and DEEPSEEK_API_KEY != "XXX") or not texts:
         return None
 
-    batch = 20
-    while batch >= 2:
+    for batch in (20, 10):
         results = [None] * len(texts)
         ok = True
         for start in range(0, len(texts), batch):
@@ -467,9 +467,35 @@ def _translate_deepseek_batch(texts, tl="zh-CN"):
             results[start:start + batch] = chunk_tr
         if ok:
             return results
-        batch //= 2
-        print(f"[warn] DeepSeek 批量翻译失败, 降为每批 {batch} 条重试", flush=True)
+        print(f"[warn] DeepSeek 批量翻译失败(batch={batch}), 降批重试一次; "
+              f"再失败将转 Google 兜底", flush=True)
     return None
+
+
+def _parse_llm_json_array(content):
+    """鲁棒解析 LLM 输出的 JSON 数组。
+    背景: 模型可能输出 ```json 代码块、前后解释文字, 且译文本身可能含方括号
+    (如 "[Completed]")——贪婪正则 \\[.*\\] 会从第一个 [ 抓到最后一个 ],
+    中间夹非 JSON 内容导致解析失败(线上 DeepSeek 批量全挂的根因)。
+    方案: 剥离代码块后, 用 json.JSONDecoder.raw_decode 依次尝试每个 '[' 位置,
+    取第一个能完整解析出的数组。返回 list 或 None。"""
+    content = (content or "").strip()
+    m = re.search(r"```(?:json)?\s*(.*?)```", content, re.S)
+    if m:
+        content = m.group(1).strip()
+    decoder = json.JSONDecoder()
+    idx = 0
+    while True:
+        idx = content.find("[", idx)
+        if idx == -1:
+            return None
+        try:
+            val, _ = decoder.raw_decode(content[idx:])
+            if isinstance(val, list):
+                return val
+        except Exception:
+            pass
+        idx += 1
 
 
 def _deepseek_call(texts, tl="zh-CN"):
@@ -503,6 +529,8 @@ def _deepseek_call(texts, tl="zh-CN"):
         "stream": False,
     }
     try:
+        t0 = time.perf_counter()
+        print(f"[info] DeepSeek 翻译 {len(texts)} 条 (模型 {DEEPSEEK_MODEL})...", flush=True)
         req = urllib.request.Request(
             "https://api.deepseek.com/chat/completions",
             data=json.dumps(payload).encode("utf-8"),
@@ -515,23 +543,12 @@ def _deepseek_call(texts, tl="zh-CN"):
         with urllib.request.urlopen(req, timeout=120) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         content = data["choices"][0]["message"]["content"]
-        # 鲁棒解析: 先整段试 json.loads, 失败再提取首个 [...] 块
-        arr = None
-        try:
-            parsed = json.loads(content)
-            if isinstance(parsed, list):
-                arr = parsed
-        except Exception:
-            pass
-        if arr is None:
-            m = re.search(r"\[.*\]", content, re.S)
-            if m:
-                try:
-                    arr = json.loads(m.group(0))
-                except Exception:
-                    arr = None
+        arr = _parse_llm_json_array(content)
+        print(f"[info] DeepSeek 返回 {len(content)} 字符, 耗时 {time.perf_counter() - t0:.1f}s", flush=True)
         if not isinstance(arr, list) or len(arr) != len(texts):
-            print(f"[warn] DeepSeek 返回条数不符: {len(arr) if isinstance(arr, list) else '?'} != {len(texts)}", flush=True)
+            preview = (content or "").replace("\n", " ")[:200]
+            print(f"[warn] DeepSeek 返回条数不符: {len(arr) if isinstance(arr, list) else '?'} "
+                  f"!= {len(texts)}; 响应预览: {preview}", flush=True)
             return None
         return [str(x) if x is not None else t for x, t in zip(arr, texts)]
     except Exception as e:
@@ -1003,8 +1020,9 @@ def main():
     parts = build_message_parts(latest, blocks)
     chunks = chunk_parts(parts, MAX_MSG_LEN, MAX_MSG_BYTES)
     t_layout = time.perf_counter() - t_seg
+    tr_n = len(state.get("tr_cache", {}))
     print(f"[info] 排版完成: {len(parts)} 段, 拆成 {len(chunks)} 条消息 "
-          f"(抓取{t_fetch:.1f}s/翻译{t_trans:.1f}s/排版{t_layout:.1f}s)", flush=True)
+          f"(抓取{t_fetch:.1f}s/翻译{t_trans:.1f}s/排版{t_layout:.1f}s, 翻译缓存{tr_n}条)", flush=True)
     for i, c in enumerate(chunks, 1):
         print(f"[info] 消息{i}: {len(c)} 字符 / {len(c.encode('utf-8'))} 字节", flush=True)
 
@@ -1120,6 +1138,15 @@ def self_test() -> bool:
     check("术语表无空值(%d个)" % len(empty_vals), not empty_vals)
     if empty_vals:
         print("       空值:", empty_vals, flush=True)
+
+    # 7) LLM JSON 数组解析器(线上 DeepSeek 批量翻译全挂的回归点)
+    p = _parse_llm_json_array
+    check("标准 JSON 数组", p('["a", "b"]') == ["a", "b"])
+    check("代码块包裹", p('```json\n["a", "b"]\n```') == ["a", "b"])
+    check("前后解释文字", p('好的：\n["a", "b"]') == ["a", "b"])
+    check("译文含方括号", p('翻译如下：\n["[已完成] 维护", "冷却 [Lv.1]"]') == ["[已完成] 维护", "冷却 [Lv.1]"])
+    check("输出被截断", p('["a", "b') is None)
+    check("非数组输出", p('{"foo": 1}') is None)
 
     print(("[self-test] 结果: " + ("全部通过" if ok else "存在失败")), flush=True)
     return ok
