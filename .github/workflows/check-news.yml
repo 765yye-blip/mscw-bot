@@ -40,6 +40,7 @@ jobs:
           ROOM_ID: ${{ secrets.ROOM_ID }}
           CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          # DEEPSEEK_MODEL: "deepseek-v4-flash"   # 可选: 换 DeepSeek 模型时在此设置
           # 可选配置（不设置则用默认值）:
           # DRY_RUN: "0"
           # MAX_MSG_LEN: "1500"
