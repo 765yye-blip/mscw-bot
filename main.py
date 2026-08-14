@@ -32,7 +32,6 @@ MapleStory Classic World（冒险岛美服怀旧服）公告推送机器人
   DISPLAY_TIMEZONE              展示发布时间所用时区（默认 Asia/Shanghai 北京时间）
   ALERT_AFTER                   连续失败达到该次数时推送告警, 成功推送后清零（默认 3）
   TR_CACHE_MAX                  行级翻译缓存上限(条), 超出丢最旧（默认 300）
-  NEWS_WEB_BASE                 官网新闻页地址, 附在消息末尾供查看原版（默认 https://maplestory.nexon.net/news）
 """
 
 import hashlib
@@ -77,8 +76,6 @@ RETRY_WAIT = int(os.environ.get("RETRY_WAIT", "90"))    # 每次重试等待秒�
 ALERT_AFTER = int(os.environ.get("ALERT_AFTER", "3"))    # 连续失败达到该次数时推送告警(成功推送后清零)
 # 行级翻译缓存: 原文行 -> 译文行, 内容更新重推时只翻译变动的行(省 token/延迟)
 TR_CACHE_MAX = int(os.environ.get("TR_CACHE_MAX", "300"))
-# 官网新闻页地址(消息末尾附链接, 图片/表格已被剔除, 给群友留看原版的入口)
-NEWS_WEB_BASE = os.environ.get("NEWS_WEB_BASE", "https://maplestory.nexon.net/news")
 # 展示发布时间所用时区(默认 Asia/Shanghai); Windows 无 tzdata 时回退固定 UTC+8
 DISPLAY_TZ = timezone(timedelta(hours=8))                # 兜底: 北京时间(无 DST, 与 Asia/Shanghai 等价)
 try:
@@ -807,11 +804,6 @@ def build_message_parts(article: dict, blocks) -> list:
                 parts.append("\n".join(lines))
         elif kind == "divider":
             parts.append(DIVIDER)
-
-    # ---- 尾部: 官网原文链接(图片/表格已被剔除, 给群友留个看原版的入口) ----
-    news_id = article.get("id")
-    if news_id:
-        parts.append(f"🔗 官网原文: {NEWS_WEB_BASE}/{news_id}")
 
     # 过滤空段
     return [p for p in parts if p and p.strip()]
