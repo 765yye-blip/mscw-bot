@@ -1,26 +1,26 @@
 {
-  "pushed_id": "0",
+  "pushed_id": "43962",
   "pushed_hash": "4c1dc70d4e54df5e",
-  "pushed_at": "2026-08-13 23:03:13",
+  "pushed_at": "2026-08-14 08:02:38",
   "title": "[Completed] Scheduled Maintenance - August 11, 2026",
   "tr_cache": {
-    "**[Updated 8/11 at 4:43 PM PDT] **The 维护 has been completed. Please 重启 your Nexon 启动器 to ensure you receive the latest 更新.": "**[更新于8月11日下午4:43 PDT]**维护已完成。请重启您的Nexon启动器以确保收到最新更新。",
-    "We will be performing scheduled 维护 starting on **Tuesday** **, August 11, 2026** at 4:00 PM PDT (7:00 PM EDT / 1:00 AM CEST August 12 / 9:00 AM AEST August 12). **We anticipate the 维护 to last approximately **2** **hours, concluding around **6:00 PM PDT (9:00 PM EDT / 3:00 AM CEST August 12 / 11:00 AM AEST August 12)**.": "我们将于**2026年8月11日（星期二）**下午4:00 PDT（晚上7:00 EDT / 凌晨1:00 CEST（8月12日）/ 上午9:00 AEST（8月12日））开始进行定期维护。**我们预计维护将持续约2小时，于下午6:00 PDT（晚上9:00 EDT / 凌晨3:00 CEST（8月12日）/ 上午11:00 AEST（8月12日））左右结束。**",
+    "**[Updated 8/11 at 4:43 PM PDT] **The 维护 has been completed. Please 重启 your Nexon 启动器 to ensure you receive the latest 更新.": "**【8月11日下午4:43（PDT）更新】**维护已完成。请重启您的Nexon启动器，以确保收到最新更新。",
+    "We will be performing scheduled 维护 starting on **Tuesday** **, August 11, 2026** at 4:00 PM PDT (7:00 PM EDT / 1:00 AM CEST August 12 / 9:00 AM AEST August 12). **We anticipate the 维护 to last approximately **2** **hours, concluding around **6:00 PM PDT (9:00 PM EDT / 3:00 AM CEST August 12 / 11:00 AM AEST August 12)**.": "我们将于2026年8月11日**星期二**下午4:00（PDT）开始进行定期维护（美国东部时间晚上7:00 / 中欧夏令时间8月12日凌晨1:00 / 澳大利亚东部标准时间8月12日上午9:00）。**预计维护将持续约2小时，结束时间约为下午6:00（PDT）（美国东部时间晚上9:00 / 中欧夏令时间8月12日凌晨3:00 / 澳大利亚东部标准时间8月12日上午11:00）。**",
     "**Tuesday, August 11, 2026": "**2026年8月11日，星期二**",
     "All 冒险岛怀旧服 game servers.": "所有冒险岛怀旧服游戏服务器。",
-    "Introducing new mobility skills brought a lot of design considerations as we aimed to balance them for various content planned for the future. At first, mobility skills were designed with cooldowns and lower MP costs. We are now shifting our approach to test skills with little to no cooldowns alongside higher MP costs, allowing us to evaluate different gameplay dynamics. As we continue to review performance data and your feedback, these skills may undergo further adjustments. Please give the updated skills a try and let us know what you think. The following Job Skills have been updated:": "引入新的移动技能带来了许多设计方面的考虑，因为我们要为未来规划的各种内容平衡这些技能。起初，移动技能被设计为有冷却时间和较低的MP消耗。现在我们正在转变思路，测试冷却时间极短或没有冷却时间、但MP消耗更高的技能，以便评估不同的玩法动态。随着我们继续审查性能数据和您的反馈，这些技能可能会进行进一步调整。请尝试更新后的技能并告诉我们您的想法。以下职业技能已更新：",
+    "Introducing new mobility skills brought a lot of design considerations as we aimed to balance them for various content planned for the future. At first, mobility skills were designed with cooldowns and lower MP costs. We are now shifting our approach to test skills with little to no cooldowns alongside higher MP costs, allowing us to evaluate different gameplay dynamics. As we continue to review performance data and your feedback, these skills may undergo further adjustments. Please give the updated skills a try and let us know what you think. The following Job Skills have been updated:": "引入新的移动技能带来了许多设计上的考量，因为我们要为未来规划的各种内容平衡这些技能。最初，移动技能设计为带有冷却时间和较低的MP消耗。现在我们正在转变思路，测试冷却时间极短或没有冷却时间、但MP消耗更高的技能，以便评估不同的游戏动态。随着我们继续审查性能数据和你的反馈，这些技能可能会进一步调整。请试试更新后的技能，并告诉我们你的想法。以下职业技能已更新：",
     "**Cooldown:** 3 seconds → 1 second": "**冷却时间：** 3秒 → 1秒",
-    "**MP Cost:** (Lv. 1) 30 - (Lv. 20) 10 → (Lv. 1) 40 - (Lv. 20) 20": "**MP消耗：** (Lv. 1) 30 - (Lv. 20) 10 → (Lv. 1) 40 - (Lv. 20) 20",
+    "**MP Cost:** (Lv. 1) 30 - (Lv. 20) 10 → (Lv. 1) 40 - (Lv. 20) 20": "**MP消耗：**（Lv. 1）30 -（Lv. 20）10 →（Lv. 1）40 -（Lv. 20）20",
     "**Cooldown:** 5 seconds → 0 second": "**冷却时间：** 5秒 → 0秒",
-    "**MP Cost:** (Lv. 1) 35 - (Lv. 20) 15 → (Lv. 1) 65 - (Lv. 20) 25": "**MP消耗：** (Lv. 1) 35 - (Lv. 20) 15 → (Lv. 1) 65 - (Lv. 20) 25",
+    "**MP Cost:** (Lv. 1) 35 - (Lv. 20) 15 → (Lv. 1) 65 - (Lv. 20) 25": "**MP消耗：** (1级) 35 - (20级) 15 → (1级) 65 - (20级) 25",
     "**Cooldown:** 3 seconds → 0 second": "**冷却时间：** 3秒 → 0秒",
-    "**MP Cost:** (Lv. 1) 60 - (Lv. 20) 20 → (Lv. 1) 70 - (Lv. 20) 30": "**MP消耗：** (Lv. 1) 60 - (Lv. 20) 20 → (Lv. 1) 70 - (Lv. 20) 30",
-    "Changed so the skill can be used while jumping.": "已更改为可以在跳跃时使用。",
-    "Increased the invincibility duration upon taking 伤害 from 1 second → 1.5 seconds": "受到伤害时的无敌持续时间从1秒 → 1.5秒",
+    "**MP Cost:** (Lv. 1) 60 - (Lv. 20) 20 → (Lv. 1) 70 - (Lv. 20) 30": "**MP消耗：** (1级) 60 - (20级) 20 → (1级) 70 - (20级) 30",
+    "Changed so the skill can be used while jumping.": "更改后，该技能可在跳跃时使用。",
+    "Increased the invincibility duration upon taking 伤害 from 1 second → 1.5 seconds": "受到伤害后的无敌时间：1秒 → 1.5秒。",
     "Resolved an issue where 魔法铠甲 at Lv.8 consumed 68 MP instead of 10 MP.": "修复了8级魔法铠甲消耗68 MP而非10 MP的问题。",
-    "Resolved an issue where 突进 at Lv. 6 did not move the character when used.": "修复了突进在6级时使用后角色不移动的问题。",
-    "Resolved an issue where changing channels while 龙之魂 was active would 生命吸收 the characters HP by 99%.": "修复了在龙之魂激活时切换频道会生命吸收角色99%的HP的问题。",
-    "[Completed] Scheduled 维护 - August 11, 2026": "[已完成] 定期维护 - 2026年8月11日"
+    "Resolved an issue where 突进 at Lv. 6 did not move the character when used.": "修复了Lv. 6的突进使用时未移动角色的问题。",
+    "Resolved an issue where changing channels while 龙之魂 was active would 生命吸收 the characters HP by 99%.": "修复了在龙之魂激活状态下切换频道，会通过生命吸收扣除角色99%HP的问题。",
+    "[Completed] Scheduled 维护 - August 11, 2026": "[已完成] 预定维护 - 2026年8月11日"
   },
-  "tr_cache_ver": "1123-1786633315"
+  "tr_cache_ver": "1123-1786665659"
 }
