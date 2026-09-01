@@ -22,5 +22,11 @@
     "Resolved an issue where changing channels while 龙之魂 was active would 生命吸收 the characters HP by 99%.": "修复了在龙之魂激活状态下切换频道，会通过生命吸收扣除角色99%HP的问题。",
     "[Completed] Scheduled 维护 - August 11, 2026": "[已完成] 预定维护 - 2026年8月11日"
   },
-  "tr_cache_ver": "1123-1786665659"
+  "tr_cache_ver": "1123-1786665659",
+  "pushed_map": {
+    "43962": "4c1dc70d4e54df5e"
+  },
+  "last_live_date": {
+    "43962": "2026-08-11T11:00:00Z"
+  }
 }
