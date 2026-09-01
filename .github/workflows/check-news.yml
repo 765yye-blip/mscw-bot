@@ -28,10 +28,11 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Validate terms.json + self-test
-        # 离线冒烟自检(术语表语法/解析/时间行/拆条), 任一失败直接让工作流失败,
+        # 离线冒烟自检(术语表语法/解析/时间行/拆条/多公告选择), 任一失败直接让工作流失败,
         # 防止带损坏术语表或回归代码推送"瞎翻版"
         run: |
           python main.py --self-test
+          python bench_translate.py --no-fetch
           echo "冒烟自检 OK"
 
       - name: Run news checker
@@ -45,6 +46,9 @@ jobs:
           # DRY_RUN: "0"
           # MAX_MSG_LEN: "1500"
           # PUSH_ON_CONTENT_UPDATE: "1"
+          # MAX_NEWS_PER_RUN: "5"      # 单次最多推送条数(防停机恢复刷屏)
+          # MAX_NEWS_AGE_HOURS: "48"   # 只补推最近 N 小时内的公告
+          # LAG_ALERT_MIN: "30"        # 发布->推送延迟告警阈值(分钟)
         run: python main.py
 
       - name: Commit state (only when new news pushed)
