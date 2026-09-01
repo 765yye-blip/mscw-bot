@@ -32,6 +32,9 @@ MapleStory Classic World（冒险岛美服怀旧服）公告推送机器人
   DISPLAY_TIMEZONE              展示发布时间所用时区（默认 Asia/Shanghai 北京时间）
   ALERT_AFTER                   连续失败达到该次数时推送告警, 成功推送后清零（默认 3）
   TR_CACHE_MAX                  行级翻译缓存上限(条), 超出丢最旧（默认 300）
+  MAX_NEWS_PER_RUN              单次运行最多处理的公告条数, 防长时间停机恢复后刷屏（默认 5）
+  MAX_NEWS_AGE_HOURS            只处理 liveDate 在最近 N 小时内的公告, 太老的公告不补推（默认 48）
+  LAG_ALERT_MIN                 发布(liveDate)到推送成功的时间差超过该分钟数时打告警日志（默认 30）
 """
 
 import hashlib
@@ -76,6 +79,13 @@ RETRY_WAIT = int(os.environ.get("RETRY_WAIT", "90"))    # 每次重试等待秒�
 ALERT_AFTER = int(os.environ.get("ALERT_AFTER", "3"))    # 连续失败达到该次数时推送告警(成功推送后清零)
 # 行级翻译缓存: 原文行 -> 译文行, 内容更新重推时只翻译变动的行(省 token/延迟)
 TR_CACHE_MAX = int(os.environ.get("TR_CACHE_MAX", "300"))
+# 单次运行最多处理的公告条数(防长时间停机恢复后一次性刷屏; 正常每天 0~3 条公告)
+MAX_NEWS_PER_RUN = int(os.environ.get("MAX_NEWS_PER_RUN", "5"))
+# 只补推 liveDate 在最近 N 小时内的公告(停机几天后恢复时不推送已成旧闻的公告)
+MAX_NEWS_AGE_HOURS = int(os.environ.get("MAX_NEWS_AGE_HOURS", "48"))
+# 发布(liveDate)到推送成功的时间差阈值(分钟), 超过则打告警日志
+# 反映"公告已发布但用户迟迟没收到"的体验伤害, 常见原因是 API 源站滞后或 CI 排队
+LAG_ALERT_MIN = int(os.environ.get("LAG_ALERT_MIN", "30"))
 # 展示发布时间所用时区(默认 Asia/Shanghai); Windows 无 tzdata 时回退固定 UTC+8
 DISPLAY_TZ = timezone(timedelta(hours=8))                # 兜底: 北京时间(无 DST, 与 Asia/Shanghai 等价)
 try:
@@ -203,10 +213,11 @@ def http_post_json(url: str, payload: dict, headers: dict, timeout: int = 20, re
 
 
 # ---------------------------------------------------------------------------
-# 1. 抓取公告列表：取最新日期的 MSCW（怀旧服）公告
+# 1. 抓取公告列表：全部怀旧服(MSCW)公告, 按发布时间倒序
 # ---------------------------------------------------------------------------
-def fetch_latest_news():
-    """返回最新一条怀旧服公告的 dict（含 id/name/liveDate/category）。"""
+def fetch_news_list():
+    """返回全部怀旧服公告的 dict 列表, 按 (liveDate, id) 倒序(最新在前)。
+    旧版只取 [0] 最新一条——同一天多条公告(维护+更新+活动)会互相吞掉, 现已全部返回。"""
     items = []
     # 加时间戳参数, 尝试绕过边缘缓存(实测: 源站同步延迟无法靠参数绕过,
     # 真正的兜底是 main() 里的运行内重试)
@@ -226,14 +237,71 @@ def fetch_latest_news():
     if not mscw:
         raise RuntimeError("没有找到怀旧服(MSCW)公告")
     mscw.sort(key=lambda n: (n.get("liveDate") or "", n.get("id") or 0), reverse=True)
-    latest = mscw[0]
-    print(f"[info] 最新怀旧服公告: id={latest['id']} date={latest.get('liveDate')} "
-          f"title={latest.get('name')}", flush=True)
-    return latest
+    print(f"[info] 公告列表: {len(mscw)} 条, 最新: id={mscw[0]['id']} "
+          f"date={mscw[0].get('liveDate')} title={mscw[0].get('name')}", flush=True)
+    return mscw
 
 
 def fetch_news_detail(news_id: int) -> dict:
     return http_get_json(f"{NEWS_API_BASE}/news/{news_id}")
+
+
+def parse_live_dt(article: dict):
+    """解析公告 liveDate -> aware datetime; 失败返回 None。
+    naive 一律按 UTC 解释(与 build_message_parts 中口径一致), 保证本地/CI 显示一致。"""
+    try:
+        raw = (article.get("liveDate") or "").replace("Z", "+00:00")
+        dt = datetime.fromisoformat(raw)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
+def _migrate_state(state: dict):
+    """旧版单公告状态 -> 新版多公告 map(原地迁移, 幂等)。
+    旧 state 只有 pushed_id/pushed_hash 两个字段, 新版需要 pushed_map(id -> hash),
+    首跑时把已推送的那一条迁进去, 避免升级后把旧公告当成新公告重推。"""
+    if "pushed_map" not in state and state.get("pushed_id") is not None:
+        state["pushed_map"] = {str(state["pushed_id"]): str(state.get("pushed_hash") or "")}
+        print(f"[info] 状态迁移: 旧版单公告状态 -> pushed_map({len(state['pushed_map'])} 条)", flush=True)
+
+
+def select_pending(news: list, state: dict, now=None) -> list:
+    """从公告列表选出本轮需要处理的公告, 按 liveDate 正序返回(先推旧的, 频道顺序自然)。
+    判定规则:
+      - 新公告: id 不在 pushed_map 且 liveDate 在最近 MAX_NEWS_AGE_HOURS 内
+      - 内容更新: id 已在 pushed_map 但 liveDate 有变化 -> 列入候选, 由调用方
+        拉详情对比 hash 后决定是否重推(取决于 PUSH_ON_CONTENT_UPDATE)
+      - id 已在 map 且 liveDate 未变 -> 直接跳过, 不拉详情(Q5 优化:
+        99% 的运行属于这种空转, 列表数据就够判定, 无需请求详情接口)
+    优先级: 新公告 > 内容更新候选(避免候选挤占名额把真新公告饿死),
+    合计不超过 MAX_NEWS_PER_RUN 条(防长时间停机恢复后刷屏)。"""
+    now = now or datetime.now(DISPLAY_TZ)
+    pushed_map = state.get("pushed_map", {})
+    last_live = state.get("last_live_date", {})
+    new_cands, update_cands = [], []
+    for n in news:                      # news 已按 liveDate 倒序
+        sid = str(n.get("id"))
+        if sid in pushed_map:
+            if last_live.get(sid) == n.get("liveDate"):
+                continue                # 已推送且时间戳未变: 无新内容, 跳过
+            update_cands.append(n)      # 时间戳变了 -> 可能内容更新, 拉详情确认(见 main)
+        else:
+            # 新公告: 太老的(停机期间积压的旧闻)不补推
+            dt = parse_live_dt(n)
+            if dt is not None:
+                age_h = (now - dt).total_seconds() / 3600
+                if age_h > MAX_NEWS_AGE_HOURS:
+                    print(f"[info] 跳过旧公告 id={sid} ({n.get('liveDate')}, {age_h:.1f}h 前)", flush=True)
+                    continue
+            new_cands.append(n)
+    candidates = new_cands[:MAX_NEWS_PER_RUN]
+    if len(candidates) < MAX_NEWS_PER_RUN:
+        candidates += update_cands[:MAX_NEWS_PER_RUN - len(candidates)]
+    candidates.sort(key=lambda n: (n.get("liveDate") or "", n.get("id") or 0))  # 正序: 先推时间早的
+    return candidates
 
 
 # ---------------------------------------------------------------------------
@@ -766,6 +834,8 @@ def build_message_parts(article: dict, blocks) -> list:
     tz_label = getattr(DISPLAY_TZ, "key", None) or "UTC+8"
     tz_display = "北京时间" if tz_label == "Asia/Shanghai" else tz_label
     parts.append(f"**发布时间**：{pub_bj}（{tz_display}）")
+    # 原文链接: 正文图片被剔除, 读者想看图/对照原文可直接点开
+    parts.append(f"**原文链接**：https://maplestory.nexon.net/news/{article.get('id')}")
     parts.append(DIVIDER)
 
     # ---- 正文 ----
@@ -962,98 +1032,123 @@ def main():
     else:
         print("[info] 翻译后端: Google 兜底 (未配置 DEEPSEEK_API_KEY)", flush=True)
 
-    # 3) 去重状态（提前加载, 供重试判断用）
+    # 去重状态(提前加载, 供重试判断用); 旧版单公告状态原地迁移
     state = load_state()
+    _migrate_state(state)
+
+    # 1) 公告列表
+    #    Nexon CMS API 源站同步可能滞后(官网网页先显示、API 后同步):
+    #    列表最高 id 仍是已推送的且没有任何待处理公告时, 等待 RETRY_WAIT 秒重拉,
+    #    最多 RETRY_TIMES 次。其余情况(有真新公告/旧公告被过滤)重试无意义, 直接处理。
+    t_seg = time.perf_counter()
+    news = fetch_news_list()
     pushed_id = state.get("pushed_id")
+    pending = select_pending(news, state)
+    attempt = 1
+    while (not pending and news and str(news[0]["id"]) == str(pushed_id)
+           and attempt < RETRY_TIMES):
+        print(f"[info] 列表最高仍是 id={news[0]['id']}（疑似 API 源站同步滞后）, "
+              f"等待 {RETRY_WAIT}s 重试 ({attempt + 1}/{RETRY_TIMES})", flush=True)
+        time.sleep(RETRY_WAIT)
+        news = fetch_news_list()
+        pending = select_pending(news, state)
+        attempt += 1
+    t_list = time.perf_counter() - t_seg
 
-    # 1) 最新公告
-    #    Nexon CMS API 源站同步可能滞后（官网网页先显示、API 后同步）:
-    #    若列表最高 id 与已推送一致, 等待 RETRY_WAIT 秒重拉, 最多 RETRY_TIMES 次
-    t_seg = time.perf_counter()
-    latest = None
-    for attempt in range(1, RETRY_TIMES + 1):
-        latest = fetch_latest_news()
-        if str(latest["id"]) != pushed_id:
-            break
-        if attempt < RETRY_TIMES:
-            print(f"[info] 列表最高仍是 id={latest['id']}（疑似 API 源站同步滞后）, "
-                  f"等待 {RETRY_WAIT}s 重试 ({attempt + 1}/{RETRY_TIMES})", flush=True)
-            time.sleep(RETRY_WAIT)
-
-    # 2) 详情
-    detail = fetch_news_detail(latest["id"])
-    h = content_hash(latest, detail)
-    t_fetch = time.perf_counter() - t_seg
-
-    # 3) 去重判断
-    pushed_hash = state.get("pushed_hash")
-    if pushed_id == str(latest["id"]):
-        if pushed_hash == h:
-            print("[info] 没有新公告, 跳过", flush=True)
-            return
-        if not PUSH_ON_CONTENT_UPDATE:
-            print(f"[info] 公告未变(id={latest['id']}), 内容虽有更新但已配置不重推", flush=True)
-            return
-        print(f"[info] 公告内容有更新, 重新推送 (id={latest['id']})", flush=True)
-
-    # 4) 解析 + 翻译 + 排版
-    blocks = classify_blocks(parse_body(detail.get("body") or ""))
-    if not blocks:
-        print("[warn] 正文解析后无文本块(可能为纯图片公告), 跳过推送", flush=True)
+    if not pending:
+        print("[info] 没有待处理公告, 跳过", flush=True)
         return
-    t_seg = time.perf_counter()
-    title_rep = apply_terms(latest["name"])
-    # 标题与正文并入同一翻译批次(带行级缓存, 内容更新重推时只翻变动的行)
-    blocks, title_trs = translate_blocks(blocks, state, [(latest["name"], title_rep)])
-    latest["title_cn"] = title_trs[0] if title_trs else title_rep
-    t_trans = time.perf_counter() - t_seg
+    print("[info] 本轮待处理 " + str(len(pending)) + " 条: "
+          + ", ".join(f"id={n['id']} ({n.get('liveDate')})" for n in pending), flush=True)
 
-    t_seg = time.perf_counter()
-    parts = build_message_parts(latest, blocks)
-    chunks = chunk_parts(parts, MAX_MSG_LEN, MAX_MSG_BYTES)
-    t_layout = time.perf_counter() - t_seg
-    tr_n = len(state.get("tr_cache", {}))
-    print(f"[info] 排版完成: {len(parts)} 段, 拆成 {len(chunks)} 条消息 "
-          f"(抓取{t_fetch:.1f}s/翻译{t_trans:.1f}s/排版{t_layout:.1f}s, 翻译缓存{tr_n}条)", flush=True)
-    for i, c in enumerate(chunks, 1):
-        print(f"[info] 消息{i}: {len(c)} 字符 / {len(c.encode('utf-8'))} 字节", flush=True)
+    # 2) 逐条处理: 详情 -> 内容更新判定 -> 解析翻译排版 -> 推送 -> 记录状态
+    for article in pending:
+        sid = str(article["id"])
+        detail = fetch_news_detail(article["id"])
+        h = content_hash(article, detail)
+        prev_hash = state.get("pushed_map", {}).get(sid)
 
-    if DRY_RUN:
-        print("\n================ 排版预览（DRY_RUN 不推送） ================\n", flush=True)
+        if prev_hash is not None and prev_hash == h:
+            # 时间戳变了但正文未变(仅标题/排版微调): 无需推送, 但要记录新时间戳,
+            # 否则下次运行又会把它列为候选, 每次白拉详情。
+            # DRY_RUN 下不落盘: 预览模式保持完全只读(不产生副作用)。
+            if not DRY_RUN:
+                state.setdefault("last_live_date", {})[sid] = article.get("liveDate")
+                save_state(state)
+            print(f"[info] id={sid} 内容未变(时间戳有变但正文相同), 跳过", flush=True)
+            continue
+        if prev_hash is not None and not PUSH_ON_CONTENT_UPDATE:
+            print(f"[info] id={sid} 内容有更新, 但已配置 PUSH_ON_CONTENT_UPDATE=0, 不重推", flush=True)
+            continue
+
+        # 解析 + 翻译 + 排版
+        blocks = classify_blocks(parse_body(detail.get("body") or ""))
+        if not blocks:
+            print(f"[warn] id={sid} 正文解析后无文本块(可能为纯图片公告), 跳过推送", flush=True)
+            continue
+        t_seg = time.perf_counter()
+        title_rep = apply_terms(article["name"])
+        # 标题与正文并入同一翻译批次(带行级缓存, 内容更新重推时只翻变动的行)
+        blocks, title_trs = translate_blocks(blocks, state, [(article["name"], title_rep)])
+        article["title_cn"] = title_trs[0] if title_trs else title_rep
+        t_trans = time.perf_counter() - t_seg
+
+        t_seg = time.perf_counter()
+        parts = build_message_parts(article, blocks)
+        chunks = chunk_parts(parts, MAX_MSG_LEN, MAX_MSG_BYTES)
+        t_layout = time.perf_counter() - t_seg
+        tr_n = len(state.get("tr_cache", {}))
+        print(f"[info] id={sid} 排版完成: {len(parts)} 段, 拆成 {len(chunks)} 条消息 "
+              f"(列表{t_list:.1f}s/翻译{t_trans:.1f}s/排版{t_layout:.1f}s, 翻译缓存{tr_n}条)", flush=True)
         for i, c in enumerate(chunks, 1):
-            print(f"-------- 第 {i}/{len(chunks)} 条 --------")
-            print(c)
-            print()
-        return
+            print(f"[info]  消息{i}: {len(c)} 字符 / {len(c.encode('utf-8'))} 字节", flush=True)
 
-    # 5) 推送
-    # ack 基于内容 hash(同内容恒定, 纯数字格式兼容接口):
-    # 若黑盒按 heychat_ack_id 幂等去重, 推送超时但实际成功后的重推
-    # 不会在频道产生重复消息(原来是时间戳, 每次重推都不同)
-    ack_base = str(int(h[:12], 16))   # 12 hex = 48bit, < 2^53, 保持数字字符串
-    ok_all = True
-    for i, c in enumerate(chunks, 1):
-        ack = f"{ack_base}{i:02d}"
-        if not send_heychat(c, ack):
-            ok_all = False
-            break
-        time.sleep(0.6)  # 避免触发限频
+        if DRY_RUN:
+            print(f"\n========== 排版预览（DRY_RUN 不推送, id={sid}） ==========\n", flush=True)
+            for i, c in enumerate(chunks, 1):
+                print(f"-------- 第 {i}/{len(chunks)} 条 --------")
+                print(c)
+                print()
+            continue
 
-    # 6) 记录状态（推送成功后）
-    if ok_all:
-        state["pushed_id"] = str(latest["id"])
+        # 推送
+        # ack 基于内容 hash(同内容恒定, 纯数字格式兼容接口):
+        # 若黑盒按 heychat_ack_id 幂等去重, 推送超时但实际成功后的重推
+        # 不会在频道产生重复消息(原来是时间戳, 每次重推都不同)
+        ack_base = str(int(h[:12], 16))   # 12 hex = 48bit, < 2^53, 保持数字字符串
+        ok_all = True
+        for i, c in enumerate(chunks, 1):
+            ack = f"{ack_base}{i:02d}"
+            if not send_heychat(c, ack):
+                ok_all = False
+                break
+            time.sleep(0.6)  # 避免触发限频
+
+        if not ok_all:
+            print(f"[error] id={sid} 推送未全部成功, 该条不记录状态(下次会重试)", flush=True)
+            _record_failure(state, "推送接口返回失败(部分消息未发出)")
+            sys.exit(1)
+
+        # 记录状态(该条成功后立即落盘; 已成功的公告不因后续公告失败而重推)
+        state.setdefault("pushed_map", {})[sid] = h
+        state.setdefault("last_live_date", {})[sid] = article.get("liveDate")
+        state["pushed_id"] = sid
         state["pushed_hash"] = h
         state["pushed_at"] = datetime.now(DISPLAY_TZ).strftime("%Y-%m-%d %H:%M:%S")
-        state["title"] = latest.get("name")
+        state["title"] = article.get("name")
         state.pop("fail_count", None)   # 推送成功, 连续失败计数清零
         state.pop("last_error", None)
         state.pop("last_fail_at", None)
+        # 延迟监控: liveDate -> 推送成功的时间差(分钟), 超阈值打告警日志
+        live_dt = parse_live_dt(article)
+        if live_dt is not None:
+            lag_min = (datetime.now(DISPLAY_TZ) - live_dt.astimezone(DISPLAY_TZ)).total_seconds() / 60
+            state["push_lag_min"] = round(lag_min)
+            if lag_min > LAG_ALERT_MIN:
+                print(f"[warn] 发布→推送延迟 {lag_min:.0f} 分钟(超过阈值 {LAG_ALERT_MIN}), "
+                      f"疑似 API 源站滞后或 CI 排队", flush=True)
         save_state(state)
-        print(f"[info] 状态已记录: {latest['id']} / {h}", flush=True)
-    else:
-        print("[error] 推送未全部成功, 不更新状态(下次会重试)", flush=True)
-        _record_failure(state, "推送接口返回失败(部分消息未发出)")
-        sys.exit(1)
+        print(f"[info] 状态已记录: {sid} / {h}", flush=True)
 
 
 def self_test() -> bool:
@@ -1139,6 +1234,57 @@ def self_test() -> bool:
     check("译文含方括号", p('翻译如下：\n["[已完成] 维护", "冷却 [Lv.1]"]') == ["[已完成] 维护", "冷却 [Lv.1]"])
     check("输出被截断", p('["a", "b') is None)
     check("非数组输出", p('{"foo": 1}') is None)
+
+    # 8) 多公告选择 + 状态迁移(多公告重构的回归点)
+    s = {"pushed_id": "43962", "pushed_hash": "4c1dc70d4e54df5e"}
+    _migrate_state(s)
+    check("旧状态迁移到 pushed_map", s["pushed_map"] == {"43962": "4c1dc70d4e54df5e"})
+    s2 = {"pushed_map": {"1": "a"}}
+    _migrate_state(s2)
+    check("已有 pushed_map 不重复迁移", s2["pushed_map"] == {"1": "a"})
+
+    from datetime import datetime as _dt, timezone as _tz
+    now = _dt(2026, 8, 14, 20, 0, tzinfo=_tz.utc).astimezone(DISPLAY_TZ)
+    news = [
+        {"id": 3, "liveDate": "2026-08-14T10:00:00Z", "name": "C"},
+        {"id": 2, "liveDate": "2026-08-14T09:00:00Z", "name": "B"},
+        {"id": 1, "liveDate": "2026-08-14T08:00:00Z", "name": "A"},
+    ]
+    st = {"pushed_map": {"2": "x"}, "last_live_date": {"2": "2026-08-14T09:00:00Z"}}
+    pend = select_pending(news, st, now=now)
+    check("多公告选择(新公告选中且按时间正序)", [str(p["id"]) for p in pend] == ["1", "3"])
+    st2 = {"pushed_map": {"1": "x", "2": "x", "3": "x"},
+           "last_live_date": {"1": "2026-08-14T08:00:00Z", "2": "2026-08-14T09:00:00Z",
+                              "3": "2026-08-14T10:00:00Z"}}
+    check("已推送且时间戳未变全部跳过(Q5: 不白拉详情)", select_pending(news, st2, now=now) == [])
+    st3 = {"pushed_map": {"1": "x", "2": "x", "3": "x"},
+           "last_live_date": {"1": "2026-08-14T08:00:00Z", "2": "2026-08-14T09:00:00Z",
+                              "3": "2026-08-14T09:00:00Z"}}
+    pend3 = select_pending(news, st3, now=now)
+    check("时间戳变化列为候选(内容更新检测)", [str(p["id"]) for p in pend3] == ["3"])
+    # 内容更新候选不挤占真新公告: 30 时间戳变了(候选), 31 是新公告, 都应入选
+    mixed = [{"id": 31, "liveDate": "2026-08-14T13:00:00Z", "name": "new"},
+             {"id": 30, "liveDate": "2026-08-14T12:00:00Z", "name": "update-cand"}]
+    st4 = {"pushed_map": {"30": "x"}, "last_live_date": {"30": "2026-08-14T09:00:00Z"}}
+    pend_mix = select_pending(mixed, st4, now=now)
+    check("新公告与内容更新候选合并且正序", [str(p["id"]) for p in pend_mix] == ["30", "31"])
+    # 极端: 前 MAX_NEWS_PER_RUN 条全是内容更新候选, 新公告也要进得去
+    many_upd = [{"id": 100 + i, "liveDate": f"2026-08-14T11:{i:02d}:00Z", "name": f"upd{i}"}
+                for i in range(MAX_NEWS_PER_RUN)]
+    news_mixed2 = [{"id": 999, "liveDate": "2026-08-14T14:00:00Z", "name": "brand-new"}] + many_upd
+    st5 = {"pushed_map": {str(100 + i): "x" for i in range(MAX_NEWS_PER_RUN)},
+           "last_live_date": {str(100 + i): "2026-08-14T09:00:00Z" for i in range(MAX_NEWS_PER_RUN)}}
+    pend_mix2 = select_pending(news_mixed2, st5, now=now)
+    mix2_ids = [str(p["id"]) for p in pend_mix2]
+    check("新公告优先于内容更新候选(名额不白给)",
+          "999" in mix2_ids and len(mix2_ids) == MAX_NEWS_PER_RUN)
+    old_news = [{"id": 9, "liveDate": "2026-08-01T10:00:00Z", "name": "old"},
+                {"id": 10, "liveDate": "2026-08-14T10:00:00Z", "name": "new"}]
+    pend4 = select_pending(old_news, {}, now=now)
+    check("超过 MAX_NEWS_AGE_HOURS 的旧公告被过滤", [str(p["id"]) for p in pend4] == ["10"])
+    many = [{"id": i, "liveDate": f"2026-08-14T10:{i:02d}:00Z", "name": str(i)}
+            for i in range(20)]
+    check("MAX_NEWS_PER_RUN 限制条数", len(select_pending(many, {}, now=now)) == MAX_NEWS_PER_RUN)
 
     print(("[self-test] 结果: " + ("全部通过" if ok else "存在失败")), flush=True)
     return ok
