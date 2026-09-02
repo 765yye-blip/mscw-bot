@@ -1,32 +1,23 @@
 {
-  "pushed_id": "43962",
-  "pushed_hash": "4c1dc70d4e54df5e",
-  "pushed_at": "2026-08-14 08:02:38",
-  "title": "[Completed] Scheduled Maintenance - August 11, 2026",
+  "pushed_id": "44134",
+  "pushed_hash": "39cb92374e3b1725",
+  "pushed_at": "2026-09-03 06:41:07",
+  "title": "Classic World Founder's Packages Now On Sale!",
   "tr_cache": {
-    "**[Updated 8/11 at 4:43 PM PDT] **The 维护 has been completed. Please 重启 your Nexon 启动器 to ensure you receive the latest 更新.": "**【8月11日下午4:43（PDT）更新】**维护已完成。请重启您的Nexon启动器，以确保收到最新更新。",
-    "We will be performing scheduled 维护 starting on **Tuesday** **, August 11, 2026** at 4:00 PM PDT (7:00 PM EDT / 1:00 AM CEST August 12 / 9:00 AM AEST August 12). **We anticipate the 维护 to last approximately **2** **hours, concluding around **6:00 PM PDT (9:00 PM EDT / 3:00 AM CEST August 12 / 11:00 AM AEST August 12)**.": "我们将于2026年8月11日**星期二**下午4:00（PDT）开始进行定期维护（美国东部时间晚上7:00 / 中欧夏令时间8月12日凌晨1:00 / 澳大利亚东部标准时间8月12日上午9:00）。**预计维护将持续约2小时，结束时间约为下午6:00（PDT）（美国东部时间晚上9:00 / 中欧夏令时间8月12日凌晨3:00 / 澳大利亚东部标准时间8月12日上午11:00）。**",
-    "**Tuesday, August 11, 2026": "**2026年8月11日，星期二**",
-    "All 冒险岛怀旧服 game servers.": "所有冒险岛怀旧服游戏服务器。",
-    "Introducing new mobility skills brought a lot of design considerations as we aimed to balance them for various content planned for the future. At first, mobility skills were designed with cooldowns and lower MP costs. We are now shifting our approach to test skills with little to no cooldowns alongside higher MP costs, allowing us to evaluate different gameplay dynamics. As we continue to review performance data and your feedback, these skills may undergo further adjustments. Please give the updated skills a try and let us know what you think. The following Job Skills have been updated:": "引入新的移动技能带来了许多设计上的考量，因为我们要为未来规划的各种内容平衡这些技能。最初，移动技能设计为带有冷却时间和较低的MP消耗。现在我们正在转变思路，测试冷却时间极短或没有冷却时间、但MP消耗更高的技能，以便评估不同的游戏动态。随着我们继续审查性能数据和你的反馈，这些技能可能会进一步调整。请试试更新后的技能，并告诉我们你的想法。以下职业技能已更新：",
-    "**Cooldown:** 3 seconds → 1 second": "**冷却时间：** 3秒 → 1秒",
-    "**MP Cost:** (Lv. 1) 30 - (Lv. 20) 10 → (Lv. 1) 40 - (Lv. 20) 20": "**MP消耗：**（Lv. 1）30 -（Lv. 20）10 →（Lv. 1）40 -（Lv. 20）20",
-    "**Cooldown:** 5 seconds → 0 second": "**冷却时间：** 5秒 → 0秒",
-    "**MP Cost:** (Lv. 1) 35 - (Lv. 20) 15 → (Lv. 1) 65 - (Lv. 20) 25": "**MP消耗：** (1级) 35 - (20级) 15 → (1级) 65 - (20级) 25",
-    "**Cooldown:** 3 seconds → 0 second": "**冷却时间：** 3秒 → 0秒",
-    "**MP Cost:** (Lv. 1) 60 - (Lv. 20) 20 → (Lv. 1) 70 - (Lv. 20) 30": "**MP消耗：** (1级) 60 - (20级) 20 → (1级) 70 - (20级) 30",
-    "Changed so the skill can be used while jumping.": "更改后，该技能可在跳跃时使用。",
-    "Increased the invincibility duration upon taking 伤害 from 1 second → 1.5 seconds": "受到伤害后的无敌时间：1秒 → 1.5秒。",
-    "Resolved an issue where 魔法铠甲 at Lv.8 consumed 68 MP instead of 10 MP.": "修复了8级魔法铠甲消耗68 MP而非10 MP的问题。",
-    "Resolved an issue where 突进 at Lv. 6 did not move the character when used.": "修复了Lv. 6的突进使用时未移动角色的问题。",
-    "Resolved an issue where changing channels while 龙之魂 was active would 生命吸收 the characters HP by 99%.": "修复了在龙之魂激活状态下切换频道，会通过生命吸收扣除角色99%HP的问题。",
-    "[Completed] Scheduled 维护 - August 11, 2026": "[已完成] 预定维护 - 2026年8月11日"
+    "Global 冒险岛怀旧服 is almost here, and you can start playing early on **Tuesday, October 6** with **怀旧服 Founder's Packages**!": "Global 冒险岛怀旧服即将上线，您可以通过**怀旧服创始人礼包**在**10月6日（星期二）**提前开始游玩！",
+    "Each **Founder's Package** includes a unique hat, effect, outfit set, and more! In addition, the **扎昆** and **橙色蘑菇** packages give **Founder's Access** to 怀旧服 on **October 6**, two weeks before the Grand Launch on Wednesday, October 21.": "每个**创始人礼包**都包含专属帽子、特效、时装套装等！此外，**扎昆**礼包与**橙色蘑菇**礼包能够让玩家在**10月6日**获得**创始人抢先体验**资格进入怀旧服，比**10月21日（星期三）**的盛大上线早两周。",
+    "*All Founder's Package items can be fully equipped or used by both male and female characters of all jobs. Additionally, all items are purely cosmetic and do not grant any stats or bonuses.*": "*所有创始人礼包物品均可供全职业男女角色完整装备或使用。此外，所有物品均为纯外观物品，不提供任何属性或加成。*",
+    "Head to the 怀旧服 Founder's Packages page for the full details. You have until **11:59 PDT on October 14** to purchase or upgrade yours! Items can be claimed via the mailbox from the start of Founder's Access through **Monday, November 30 at 11:59 PM (UTC)**. Note that the Founder’s Package can only be claimed once per account on each platform (once on the Nexon 网页 and once on Steam), and you will need to leave 冒险岛 before you can open your Founder’s Package items. After claiming your package, you will have 30 days to open your package.": "前往怀旧服创始人礼包页面查看完整详情。您必须在**10月14日晚上11:59（PDT）**前购买或升级您的礼包！物品可从创始人抢先体验开始至**11月30日（星期一）晚上11:59（UTC）**通过邮箱领取。请注意，创始人礼包在每个平台上每个账号只能领取一次（Nexon网页一次，Steam一次），并且您需要先退出冒险岛才能打开创始人礼包物品。领取礼包后，您有30天时间打开。",
+    "怀旧服 Founder's Packages Now On Sale!": "怀旧服创始人礼包现已开售！"
   },
-  "tr_cache_ver": "1123-1786665659",
+  "tr_cache_ver": "1123-1788388818",
   "pushed_map": {
-    "43962": "4c1dc70d4e54df5e"
+    "43962": "4c1dc70d4e54df5e",
+    "44134": "39cb92374e3b1725"
   },
   "last_live_date": {
-    "43962": "2026-08-11T11:00:00Z"
-  }
+    "43962": "2026-08-11T11:00:00Z",
+    "44134": "2026-09-02T11:00:00Z"
+  },
+  "push_lag_min": 701
 }
