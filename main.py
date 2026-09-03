@@ -308,7 +308,8 @@ def select_pending(news: list, state: dict, now=None) -> list:
 # 2. 解析正文 HTML -> 结构块
 #    ('heading', 文本) 小标题   ('para', 文本) 段落
 #    ('list', [项...]) 列表     ('divider',)  分隔线
-#    图片/链接被剔除; <strong> 转 **粗体**; <br> 转 \n
+#    图片被剔除; <a href> 保留为 "锚文本 (URL)"(黑盒语音不保证渲染 []() 链接,
+#    URL 明文基本都能被客户端自动识别为可点击链接); <strong> 转 **粗体**; <br> 转 \n
 # ---------------------------------------------------------------------------
 class _BodyParser(HTMLParser):
     def __init__(self):
@@ -318,6 +319,7 @@ class _BodyParser(HTMLParser):
         self._lists = []          # 列表栈(支持嵌套 ul/li, 收尾时展平为单个 list 块)
         self._li = None           # 当前列表项字符列表
         self._in_li = False
+        self._hrefs = []          # <a> 链接栈: start 压入 href, end 时把 URL 附到锚文本后
         self._skip = 0            # 图片内部跳过计数
 
     # ---- 内部工具 ----
@@ -361,6 +363,16 @@ class _BodyParser(HTMLParser):
             buf = self._li if self._in_li else self._cur
             if buf is not None:
                 buf.append("*")
+        elif tag == "a":
+            # 记录 href(协议相对地址 // 补全为 https:)
+            href = ""
+            for k, v in attrs:
+                if k.lower() == "href":
+                    href = (v or "").strip()
+                    break
+            if href.startswith("//"):
+                href = "https:" + href
+            self._hrefs.append(href)
         elif tag in ("p", "h1", "h2", "h3", "h4", "h5", "h6"):
             self._flush_para()
             self._cur = []
@@ -389,6 +401,13 @@ class _BodyParser(HTMLParser):
             buf = self._li if self._in_li else self._cur
             if buf is not None:
                 buf.append("*")
+        elif tag == "a":
+            href = self._hrefs.pop() if self._hrefs else ""
+            if href:
+                buf = self._li if self._in_li else self._cur
+                if buf is not None:
+                    # 链接 URL 保留为明文, 客户端一般会自动识别成可点击链接
+                    buf.append(f" ({href})")
         elif tag in ("p", "h1", "h2", "h3", "h4", "h5", "h6"):
             self._flush_para()
         elif tag == "li":
@@ -702,6 +721,22 @@ HEADING_OVERRIDES = {
     "Common": "通用",
 }
 
+# 公告结尾署名/客套语的固定译法（整行精确匹配后直接使用, 不送翻译引擎）。
+# 原文常见结构是 <p>Thank you,</p><p>The MapleStory Team</p>,
+# 若交给翻译引擎偶发会漏掉/译歪署名行(实测推送只显示"谢谢,"而少了"冒险岛团队"),
+# 这里兜底保证结尾署名稳定。
+SIGNATURE_FIX = {
+    "Thank you,": "谢谢，",
+    "Thank you": "谢谢，",
+    "Thanks,": "谢谢，",
+    "Thanks": "谢谢，",
+    "Thank you for reading,": "感谢阅读，",
+    "The MapleStory Team": "冒险岛团队",
+    "MapleStory Team": "冒险岛团队",
+    "Sincerely,": "此致，",
+    "Best regards,": "此致敬礼，",
+}
+
 
 def translate_blocks(blocks, state=None, title_texts=None):
     """翻译所有块里的文本；返回 (新块列表, 标题译文列表或 None)。翻译失败时保留原文。
@@ -746,6 +781,9 @@ def translate_blocks(blocks, state=None, title_texts=None):
                 tr_map[(b, k, li)] = rep
                 if re.search(r"[A-Za-z]", rep):
                     need_units.append((b, k, li, rep))
+        elif SIGNATURE_FIX.get(raw.strip()) is not None:
+            # 结尾署名/客套行: 固定译法, 不依赖翻译引擎(防署名丢失/译歪)
+            tr_map[(b, k, li)] = SIGNATURE_FIX[raw.strip()]
         elif _should_keep_original(raw):
             tr_map[(b, k, li)] = raw
         else:
@@ -1185,6 +1223,20 @@ def self_test() -> bool:
     para_text = " ".join(b[1] for b in blocks if b[0] == "para")
     check("粗体转**/图片剔除/script跳过",
           "**bold**" in para_text and "x.png" not in para_text and "var x" not in para_text)
+
+    # 链接保留: <a href> 的 URL 应以明文跟在锚文本后(黑盒语音不保证 []() 渲染)
+    link_blk = parse_body(
+        '<p>Buy at <a href="https://www.nexon.com/mscw/pre-launch-sales">'
+        "the Founder website</a> now.</p>"
+    )
+    check("链接 URL 保留为明文",
+          link_blk[0][1] == "Buy at the Founder website (https://www.nexon.com/mscw/pre-launch-sales) now.")
+
+    # 结尾署名固定译法(纯本地逻辑, 不触发翻译网络请求)
+    sig_blocks, _ = translate_blocks(
+        [("para", "Thank you,"), ("para", "The MapleStory Team")], None)
+    check("结尾署名固定译法(谢谢,/冒险岛团队)",
+          [sb[1] for sb in sig_blocks] == ["谢谢，", "冒险岛团队"])
 
     # 3) 时间/日期行判断
     check("时区行保留(PDT)", _should_keep_original("4:00 PM (PDT): 5:00 PM (PDT)"))
