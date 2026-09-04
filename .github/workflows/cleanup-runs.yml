@@ -1,0 +1,45 @@
+# 一次性清理工具: 手动触发后删除本仓库全部 workflow run 历史记录(正在运行的除外)。
+# 用完后请删除本文件, 防止误触发。删除的只是运行记录/日志, 不影响代码与后续推送。
+name: cleanup-runs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          api="https://api.github.com/repos/${{ github.repository }}/actions/runs"
+          page=1
+          deleted=0
+          while :; do
+            ids=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "$api?per_page=100&page=$page" \
+                  | python3 -c "import sys,json;print('\n'.join(str(r['id']) for r in json.load(sys.stdin).get('workflow_runs',[])))")
+            [ -z "$ids" ] && break
+            for id in $ids; do
+              # 正在运行的 run 无法删除(409), 跳过; 其余失败仅提示不中断
+              code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+                   -H "Authorization: Bearer $GH_TOKEN" \
+                   -H "Accept: application/vnd.github+json" \
+                   "$api/$id")
+              case "$code" in
+                20*|404) deleted=$((deleted+1)) ;;
+                *) echo "跳过 run $id (HTTP $code)";;
+              esac
+              if [ $((deleted % 50)) -eq 0 ] && [ $deleted -gt 0 ]; then echo "已删除 $deleted 条"; fi
+            done
+            page=$((page+1))
+            [ $page -gt 60 ] && echo "超过 60 页, 停止(应已覆盖 6000 条)" && break
+          done
+          echo "清理完成, 共删除 $deleted 条"
