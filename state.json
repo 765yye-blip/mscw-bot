@@ -1,7 +1,7 @@
 {
   "pushed_id": "44134",
   "pushed_hash": "56421c3066f2fe6b",
-  "pushed_at": "2026-09-04 12:39:48",
+  "pushed_at": "2026-09-04 12:46:17",
   "title": "Classic World Founder's Packages Now On Sale!",
   "tr_cache": {
     "With the 创始人礼包 now available, we would like to explain how purchasing works on Steam and our official webstore so you can choose the option that best suits you.": "随着创始人礼包现已推出，我们想说明一下在 Steam 和我们的官方网页商店上的购买方式，以便您选择最适合您的选项。",
@@ -9,18 +9,23 @@
     "If you would like to compare the full 面板 of the Founder’s Package tiers, or if you would like the ability to upgrade your package before the sales end period, we recommend purchasing through the [Global 冒险岛 创始人礼包 网页](https://www.nexon.com/mscw/pre-launch-sales), where all tiers and the upgrade option are available.": "如果您想比较创始人礼包各档位的完整面板，或者想在销售期结束前升级您的礼包，我们建议您通过[全球冒险岛创始人礼包网页](https://www.nexon.com/mscw/pre-launch-sales)购买，那里提供所有档位和升级选项。",
     "The 扎昆礼包 is identical on both platforms. Whether you purchase it on Steam or through the Nexon 网页, the 扎昆礼包 contains the same items and the same 创始人资格 benefit. You are free to purchase on whichever platform you prefer, and you do not need to purchase on both platforms. A single 扎昆礼包 purchase grants your items and 创始人资格 on your account.": "扎昆礼包在两个平台上完全相同。无论您是通过 Steam 还是 Nexon 网页购买，扎昆礼包都包含相同的道具和相同的创始人资格权益。您可以自由选择在任一平台购买，无需在两个平台都购买。单次购买扎昆礼包即会将道具和创始人资格发放到您的账号上。",
     "If you have any questions or need assistance with a purchase, please contact [Player Support](https://support-maplestory.nexon.com/hc/en-us).": "如果您有任何疑问或需要购买方面的帮助，请联系[玩家支持](https://support-maplestory.nexon.com/hc/en-us)。",
-    "创始人礼包 Purchase Guide": "创始人礼包购买指南"
+    "创始人礼包 Purchase Guide": "创始人礼包购买指南",
+    "Global 冒险岛怀旧服 is almost here, and you can start playing early on **Tuesday, October 6** with **怀旧服 创始人礼包**!": "全球冒险岛怀旧服即将到来，凭**怀旧服创始人礼包**即可在**10月6日（星期二）**提前开始游玩！",
+    "Each **创始人礼包** includes a unique hat, effect, outfit set, and more! In addition, the **扎昆** and **橙色蘑菇** packages give **创始人资格** to 怀旧服 on **October 6**, two weeks before the Grand Launch on Wednesday, October 21.": "每个**创始人礼包**都包含一顶独特帽子、特效、套装服饰等更多内容！此外，**扎昆**和**橙色蘑菇**礼包将于**10月6日**提供怀旧服的**创始人资格**，比10月21日（星期三）的盛大发布早两周。",
+    "*All 创始人礼包 items can be fully equipped or used by both male and female characters of all jobs. Additionally, all items are purely cosmetic and do not grant any stats or bonuses.*": "*所有创始人礼包道具均可由全职业男女角色完整装备或使用。此外，所有道具均为纯外观装饰，不提供任何属性或加成。*",
+    "[Head to the 怀旧服 创始人礼包 page for the full details](https://www.nexon.com/mscw/pre-launch-sales). You have until **11:59 PM PDT on October 14** to purchase or upgrade yours! Items can be claimed via the mailbox from the start of 创始人资格 through **Monday, November 30 at 11:59 PM (UTC)**. Note that the Founder’s Package can only be claimed once per account on each platform (once on the Nexon 网页 and once on Steam), and you will need to leave 冒险岛 before you can open your Founder’s Package items. After claiming your package, you will have 30 days to open your package.": "[前往怀旧服创始人礼包页面查看完整详情](https://www.nexon.com/mscw/pre-launch-sales)。你可以在**太平洋夏令时间10月14日晚上11:59**之前购买或升级你的礼包！道具可在创始人资格开始后通过邮箱领取，直至**11月30日（星期一）晚上11:59（UTC）**。请注意，创始人礼包在每个平台上每账号只能领取一次（Nexon网页一次，Steam一次），并且你需要先退出冒险岛，才能打开创始人礼包道具。领取礼包后，你将有30天时间打开它。",
+    "怀旧服 创始人礼包 Now On Sale!": "怀旧服创始人礼包现已开售！"
   },
   "tr_cache_ver": "1134-8c3205bca8c9",
   "pushed_map": {
     "43962": "4c1dc70d4e54df5e",
-    "44883": "19cd7b8bb706a623"
-    
+    "44883": "19cd7b8bb706a623",
+    "44134": "56421c3066f2fe6b"
   },
   "last_live_date": {
     "43962": "2026-08-11T11:00:00Z",
-    "44883": "2026-09-02T14:00:00Z"
-    
+    "44883": "2026-09-02T14:00:00Z",
+    "44134": "2026-09-02T16:45:00Z"
   },
-  "push_lag_min": 2155
+  "push_lag_min": 2161
 }
