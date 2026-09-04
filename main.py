@@ -325,7 +325,8 @@ class _BodyParser(HTMLParser):
         self._in_li = False
         self._hrefs = []          # <a> 链接栈: start 压入 href
         self._link_txts = []      # <a> 锚文本栈: 与 _hrefs 对齐, end 时生成 [文字](URL)
-        self._skip = 0            # 图片内部跳过计数
+        self._link_imgs = []      # <a> 链接栈: 该链接内是否出现过 <img>(与 _hrefs 对齐)
+        self._skip = 0            # script/style 内部跳过计数
 
     # ---- 内部工具 ----
     @staticmethod
@@ -398,6 +399,7 @@ class _BodyParser(HTMLParser):
                 href = "https:" + href
             self._hrefs.append(href)
             self._link_txts.append([])
+            self._link_imgs.append(False)
         elif tag in ("p", "h1", "h2", "h3", "h4", "h5", "h6"):
             self._flush_para()
             self._cur = []
@@ -412,8 +414,11 @@ class _BodyParser(HTMLParser):
             self._flush_li()
             self._li = []
             self._in_li = True
-        # img/video/iframe 等自闭合元素: 无内容也无闭合标签, 直接忽略
-        # （图片一律剔除, 不输出图片链接）
+        elif tag == "img":
+            # 图片一律剔除(不输出图片链接); 若位于 <a> 内则标记该链接"含图",
+            # </a> 收尾时据此丢弃整图链接外壳, 避免残留孤零零的 (URL) 行
+            if self._link_txts:
+                self._link_imgs[-1] = True
 
     def handle_endtag(self, tag):
         if tag in ("script", "style"):
@@ -431,6 +436,7 @@ class _BodyParser(HTMLParser):
         elif tag == "a":
             href = self._hrefs.pop() if self._hrefs else ""
             parts = self._link_txts.pop() if self._link_txts else []
+            link_has_img = self._link_imgs.pop() if self._link_imgs else False
             label = re.sub(r"\s+", " ", "".join(parts)).strip()
             if not href:
                 # 无 href 的 <a>(如页内锚点): 锚文本原样保留
@@ -439,8 +445,13 @@ class _BodyParser(HTMLParser):
                 # Markdown 链接: 黑盒语音实测支持 [文字](URL) 渲染(2026-09-04 起),
                 # 点击名称跳转, 正文不再平铺完整网址
                 self._append_text(f"[{label}]({href})")
+            elif link_has_img:
+                # <a><img></a> 整图链接: 图片已剔除, 外层 href 对读者没有信息量,
+                # 一并丢弃, 避免推送残留孤零零的 (URL) 行(44134 实测出现两条)
+                pass
             else:
-                # 空锚文本, 或 URL 含空格/右括号(会破坏 []() 语法): 退回明文 URL
+                # 空锚文本且非图片链接, 或 URL 含空格/右括号(会破坏 []() 语法):
+                # 退回明文 URL
                 self._append_text(f"{label} ({href})" if label else f" ({href})")
         elif tag in ("p", "h1", "h2", "h3", "h4", "h5", "h6"):
             self._flush_para()
@@ -469,6 +480,9 @@ class _BodyParser(HTMLParser):
         elif tag == "hr":
             self._flush_para()
             self.blocks.append(("divider", ""))
+        elif tag == "img":
+            if self._link_txts:
+                self._link_imgs[-1] = True
 
     def handle_data(self, data):
         if self._skip > 0:
@@ -1213,18 +1227,25 @@ def main():
         # 若黑盒按 heychat_ack_id 幂等去重, 推送超时但实际成功后的重推
         # 不会在频道产生重复消息(原来是时间戳, 每次重推都不同)
         ack_base = str(int(h[:12], 16))   # 12 hex = 48bit, < 2^53, 保持数字字符串
-        ok_all = True
+        sent = 0
         for i, c in enumerate(chunks, 1):
             ack = f"{ack_base}{i:02d}"
             if not send_heychat(c, ack):
-                ok_all = False
                 break
+            sent += 1
             time.sleep(0.6)  # 避免触发限频
 
-        if not ok_all:
-            print(f"[error] id={sid} 推送未全部成功, 该条不记录状态(下次会重试)", flush=True)
-            _record_failure(state, "推送接口返回失败(部分消息未发出)")
+        if sent == 0:
+            # 一条都没发出去(纯故障, 如断网/token 失效): 不记录, 下次整条重试
+            print(f"[error] id={sid} 推送失败(0/{len(chunks)} 条发出), 不记录状态(下次会重试)", flush=True)
+            _record_failure(state, "推送接口返回失败(消息全部未发出)")
             sys.exit(1)
+        if sent < len(chunks):
+            # 部分成功: 消息已部分进入频道。旧逻辑此时不落盘, 导致下轮把整条
+            # 公告当"新公告"重推、频道重复刷屏(44883 实锤踩过, 2026-09-04)。
+            # 处理: 至少发出 1 条即按已推送落盘——宁可频道缺尾部若干条, 也不整条重推。
+            print(f"[warn] id={sid} 推送部分成功({sent}/{len(chunks)} 条), "
+                  f"已按推送成功记录(缺的尾部消息不自动补发)", flush=True)
 
         # 记录状态(该条成功后立即落盘; 已成功的公告不因后续公告失败而重推)
         state.setdefault("pushed_map", {})[sid] = h
@@ -1293,6 +1314,15 @@ def self_test() -> bool:
                             "(https://www.nexon.com/mscw/pre-launch-sales) now.")
     empty_link = parse_body('<p>See <a href="https://example.com/"></a> the page</p>')
     check("空锚文本链接退回明文 URL", empty_link[0][1] == "See (https://example.com/) the page")
+    img_link = parse_body(
+        '<p><a href="https://www.nexon.com/mscw/pre-launch-sales">'
+        '<img src="https://g.nexonstatic.com/x/banner.png"></a></p>')
+    check("整图链接外壳不残留(44134 两条裸链接回归)",
+          all(blk[0] != "para" or "(https://www.nexon.com/mscw/pre-launch-sales)" not in blk[1]
+              for blk in img_link))
+    mixed_img_link = parse_body(
+        '<p>Buy at <a href="https://example.com/"><img src="x.png">the page</a> now.</p>')
+    check("图文混合链接保留文字部分", mixed_img_link[0][1] == "Buy at [the page](https://example.com/) now.")
     bold_link = parse_body(
         '<p><a href="https://n.nexon.com/x"><strong>Hot Time</strong></a></p>')
     check("链接内粗体标记不泄漏", bold_link[0][1] == "[Hot Time](https://n.nexon.com/x)")

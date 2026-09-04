@@ -1,26 +1,28 @@
 {
   "pushed_id": "44134",
-  "pushed_hash": "56421c3066f2fe6b",
-  "pushed_at": "2026-09-04 12:03:36",
+  "pushed_hash": "39cb92374e3b1725",
+  "pushed_at": "2026-09-03 08:17:29",
   "title": "Classic World Founder's Packages Now On Sale!",
   "tr_cache": {
-    "With the Founder's Package now available, we would like to explain how purchasing works on Steam and our official webstore so you can choose the option that best suits you.": "随着创始人礼包现已推出，我们想说明一下在 Steam 和我们官方网页商店上的购买方式，以便您选择最适合自己的选项。",
-    "On Steam, the Founder's Package is offered as the 扎昆 Package only. Due to Steam's platform policies, package upgrades are not supported the way they are on our own store. To prevent unintended duplicate purchases, we have chosen to offer only the 扎昆 Package, our most complete Founder's package tier on Steam.": "在 Steam 上，创始人礼包仅以扎昆 Package 的形式提供。由于 Steam 平台政策，礼包升级的方式不受支持，不像我们自己的商店那样。为避免意外重复购买，我们选择只在 Steam 上提供扎昆 Package——这是我们最完整的创始人礼包档位。",
-    "If you would like to compare the full 面板 of the Founder’s Package tiers, or if you would like the ability to upgrade your package before the sales end period, we recommend purchasing through the [Global 冒险岛 Founder's Package 网页](https://www.nexon.com/mscw/pre-launch-sales), where all tiers and the upgrade option are available.": "如果您想比较创始人礼包各档位的完整面板，或者希望在销售期结束前升级您的礼包，我们建议通过[全球冒险岛创始人礼包网页](https://www.nexon.com/mscw/pre-launch-sales)购买，那里提供所有档位和升级选项。",
-    "The 扎昆 Package is identical on both platforms. Whether you purchase it on Steam or through the Nexon 网页, the 扎昆 Package contains the same items and the same Founder's Access benefit. You are free to purchase on whichever platform you prefer, and you do not need to purchase on both platforms. A single 扎昆 Package purchase grants your items and Founder's Access on your account.": "扎昆 Package 在两个平台上完全相同。无论您是从 Steam 还是 Nexon 网页购买，扎昆 Package 都包含相同的物品和相同的创始人资格权益。您可以自由选择偏好的平台进行购买，无需在两个平台都购买。购买一次扎昆 Package 即可将物品和创始人资格发放到您的账户。",
-    "If you have any questions or need assistance with a purchase, please contact [Player Support](https://support-maplestory.nexon.com/hc/en-us).": "如果您有任何疑问或需要购买帮助，请联系[玩家支持](https://support-maplestory.nexon.com/hc/en-us)。",
+    "Hi Maplers,": "各位冒险家，你们好！",
+    "With the Founder's Package now available, we would like to explain how purchasing works on Steam and our official webstore so you can choose the option that best suits you.": "随着创始人礼包现已上线，我们想说明一下在Steam和我们官方网页商店上的购买方式，以便您选择最适合自己的选项。",
+    "On Steam, the Founder's Package is offered as the 扎昆 Package only. Due to Steam's platform policies, package upgrades are not supported the way they are on our own store. To prevent unintended duplicate purchases, we have chosen to offer only the 扎昆 Package, our most complete Founder's package tier on Steam.": "在Steam上，创始人礼包仅以“扎昆礼包”的形式提供。由于Steam平台政策，礼包升级无法像我们自家商店那样支持。为避免意外重复购买，我们选择仅在Steam上提供最完整的创始人礼包档位——“扎昆礼包”。",
+    "If you would like to compare the full 面板 of the Founder’s package tiers, or if you would like the ability to upgrade your package before the sales end period, we recommend purchasing through the Global 冒险岛 Founder's Package 网页, where all tiers and the upgrade option are available.": "如果您想比较创始人礼包各档位的完整面板，或者希望在销售结束前升级您的礼包，我们建议通过Global 冒险岛 Founder's Package 网页购买，该网页提供所有档位和升级选项。",
+    "The 扎昆 Package is identical on both platforms. Whether you purchase it on Steam or through the Nexon 网页, the 扎昆 Package contains the same items and the same Founder's Access benefit. You are free to purchase on whichever platform you prefer, and you do not need to purchase on both platforms. A single 扎昆 Package purchase grants your items and Founder's Access on your account.": "“扎昆礼包”在两个平台上完全相同。无论您是通过Steam还是Nexon网页购买，“扎昆礼包”都包含相同的物品和相同的创始人访问权限。您可以自由选择偏好的平台购买，无需在两个平台都购买。只需购买一次“扎昆礼包”，即可将物品和创始人访问权限授予您的账号。",
+    "If you have any questions or need assistance with a purchase, please contact Customer Support.": "如果您有任何疑问或在购买时需要帮助，请联系客户支持。",
+    "Thank you,": "谢谢，",
     "Founder's Package Purchase Guide": "创始人礼包购买指南"
   },
-  "tr_cache_ver": "1123-5367571b156e",
+  "tr_cache_ver": "1123-1788394533",
   "pushed_map": {
     "43962": "4c1dc70d4e54df5e",
-    "44883": "19cd7b8bb706a623",
-    "44134": "56421c3066f2fe6b"
+    "44134": "39cb92374e3b1725",
+    "44883": "2d30aeb050511206"
   },
   "last_live_date": {
     "43962": "2026-08-11T11:00:00Z",
-    "44883": "2026-09-02T14:00:00Z",
-    "44134": "2026-09-02T16:45:00Z"
+    "44134": "2026-09-02T16:45:00Z",
+    "44883": "2026-09-02T14:00:00Z"
   },
-  "push_lag_min": 2119
+  "push_lag_min": 617
 }
