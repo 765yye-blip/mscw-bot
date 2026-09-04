@@ -5,7 +5,7 @@ MapleStory Classic World（冒险岛美服怀旧服）公告推送机器人
 =========================================================
 流程:
   抓取 Nexon CMS 公告列表 -> 取最新日期的怀旧服(MSCW)公告
-  -> 解析正文(去掉图片/链接等噪音) -> 翻译成中文(时间行保留原文)
+  -> 解析正文(去掉图片等噪音, <a> 链接转 [文字](网址)) -> 翻译成中文(时间行保留原文)
   -> 按黑盒语音 Markdown 排版规则美化(标题/小标题/粗体/分行/分隔线)
   -> 推送到指定房间的指定频道 -> 记录状态, 不重复推送
 
@@ -308,8 +308,9 @@ def select_pending(news: list, state: dict, now=None) -> list:
 # 2. 解析正文 HTML -> 结构块
 #    ('heading', 文本) 小标题   ('para', 文本) 段落
 #    ('list', [项...]) 列表     ('divider',)  分隔线
-#    图片被剔除; <a href> 保留为 "锚文本 (URL)"(黑盒语音不保证渲染 []() 链接,
-#    URL 明文基本都能被客户端自动识别为可点击链接); <strong> 转 **粗体**; <br> 转 \n
+#    图片被剔除; <a href> 链接转 Markdown [锚文本](URL)(黑盒语音实测支持渲染,
+#    点击名称跳转、正文不裸露完整网址, 2026-09-04 起; 空锚文本退回明文 URL);
+#    <strong> 转 **粗体**; <br> 转 \n
 # ---------------------------------------------------------------------------
 class _BodyParser(HTMLParser):
     def __init__(self):
@@ -319,7 +320,8 @@ class _BodyParser(HTMLParser):
         self._lists = []          # 列表栈(支持嵌套 ul/li, 收尾时展平为单个 list 块)
         self._li = None           # 当前列表项字符列表
         self._in_li = False
-        self._hrefs = []          # <a> 链接栈: start 压入 href, end 时把 URL 附到锚文本后
+        self._hrefs = []          # <a> 链接栈: start 压入 href
+        self._link_txts = []      # <a> 锚文本栈: 与 _hrefs 对齐, end 时生成 [文字](URL)
         self._skip = 0            # 图片内部跳过计数
 
     # ---- 内部工具 ----
@@ -347,24 +349,43 @@ class _BodyParser(HTMLParser):
                 self._lists[-1].append((text, len(self._lists) - 1))
             self._li = None
 
+    def _append_text(self, s):
+        """链接闭合时把成品文本写入当前段落/列表项(必要时自动开段, 与 handle_data 语义一致)。"""
+        if not s:
+            return
+        if self._in_li:
+            if self._li is not None:
+                self._li.append(s)
+            return
+        if self._cur is None:
+            if not s.strip():
+                return
+            self._cur = []
+        self._cur.append(s)
+
     # ---- 事件 ----
     def handle_starttag(self, tag, attrs):
         if tag in ("script", "style"):          # 有闭合标签, 需要跳过内容
             self._skip += 1
         elif tag == "br":
-            buf = self._li if self._in_li else self._cur
-            if buf is not None:
-                buf.append("\n")
+            if self._link_txts:
+                self._link_txts[-1].append(" ")   # 链接内换行折成空格, 避免破坏 [文字](URL) 语法
+            else:
+                buf = self._li if self._in_li else self._cur
+                if buf is not None:
+                    buf.append("\n")
         elif tag in ("strong", "b"):
-            buf = self._li if self._in_li else self._cur
-            if buf is not None:
-                buf.append("**")
+            if not self._link_txts:               # 链接内锚文本保持纯文本
+                buf = self._li if self._in_li else self._cur
+                if buf is not None:
+                    buf.append("**")
         elif tag in ("em", "i"):
-            buf = self._li if self._in_li else self._cur
-            if buf is not None:
-                buf.append("*")
+            if not self._link_txts:               # 链接内锚文本保持纯文本
+                buf = self._li if self._in_li else self._cur
+                if buf is not None:
+                    buf.append("*")
         elif tag == "a":
-            # 记录 href(协议相对地址 // 补全为 https:)
+            # 记录 href(协议相对地址 // 补全为 https:); 锚文本进入 _link_txts 暂存
             href = ""
             for k, v in attrs:
                 if k.lower() == "href":
@@ -373,6 +394,7 @@ class _BodyParser(HTMLParser):
             if href.startswith("//"):
                 href = "https:" + href
             self._hrefs.append(href)
+            self._link_txts.append([])
         elif tag in ("p", "h1", "h2", "h3", "h4", "h5", "h6"):
             self._flush_para()
             self._cur = []
@@ -394,20 +416,29 @@ class _BodyParser(HTMLParser):
         if tag in ("script", "style"):
             self._skip = max(0, self._skip - 1)
         elif tag in ("strong", "b"):
-            buf = self._li if self._in_li else self._cur
-            if buf is not None:
-                buf.append("**")
-        elif tag in ("em", "i"):
-            buf = self._li if self._in_li else self._cur
-            if buf is not None:
-                buf.append("*")
-        elif tag == "a":
-            href = self._hrefs.pop() if self._hrefs else ""
-            if href:
+            if not self._link_txts:               # 链接内锚文本保持纯文本
                 buf = self._li if self._in_li else self._cur
                 if buf is not None:
-                    # 链接 URL 保留为明文, 客户端一般会自动识别成可点击链接
-                    buf.append(f" ({href})")
+                    buf.append("**")
+        elif tag in ("em", "i"):
+            if not self._link_txts:               # 链接内锚文本保持纯文本
+                buf = self._li if self._in_li else self._cur
+                if buf is not None:
+                    buf.append("*")
+        elif tag == "a":
+            href = self._hrefs.pop() if self._hrefs else ""
+            parts = self._link_txts.pop() if self._link_txts else []
+            label = re.sub(r"\s+", " ", "".join(parts)).strip()
+            if not href:
+                # 无 href 的 <a>(如页内锚点): 锚文本原样保留
+                self._append_text(label)
+            elif label and not re.search(r"[)\s]", href):
+                # Markdown 链接: 黑盒语音实测支持 [文字](URL) 渲染(2026-09-04 起),
+                # 点击名称跳转, 正文不再平铺完整网址
+                self._append_text(f"[{label}]({href})")
+            else:
+                # 空锚文本, 或 URL 含空格/右括号(会破坏 []() 语法): 退回明文 URL
+                self._append_text(f"{label} ({href})" if label else f" ({href})")
         elif tag in ("p", "h1", "h2", "h3", "h4", "h5", "h6"):
             self._flush_para()
         elif tag == "li":
@@ -426,15 +457,21 @@ class _BodyParser(HTMLParser):
     def handle_startendtag(self, tag, attrs):
         # 自闭合标签 <img/> <br/> 等
         if tag == "br":
-            buf = self._li if self._in_li else self._cur
-            if buf is not None:
-                buf.append("\n")
+            if self._link_txts:
+                self._link_txts[-1].append(" ")
+            else:
+                buf = self._li if self._in_li else self._cur
+                if buf is not None:
+                    buf.append("\n")
         elif tag == "hr":
             self._flush_para()
             self.blocks.append(("divider", ""))
 
     def handle_data(self, data):
         if self._skip > 0:
+            return
+        if self._link_txts:                       # <a> 内文本先进锚文本槽
+            self._link_txts[-1].append(data)
             return
         if self._in_li:
             if self._li is not None:
@@ -595,7 +632,8 @@ def _deepseek_call(texts, tl="zh-CN"):
         "要求：\n"
         "1. 输出一个与输入等长的 JSON 字符串数组，第 i 个元素是第 i 项的译文；\n"
         "2. 只输出 JSON 数组本身，不要任何解释、不要 Markdown 代码块标记；\n"
-        "3. 译文要自然通顺，保留原文的换行符、数字和网址；\n"
+        "3. 译文要自然通顺，保留原文的换行符、数字和网址；形如 [文字](网址) 的链接"
+        "只翻译方括号里的文字，方括号、圆括号与网址必须原样保留、不得拆散；\n"
         f"4. 如果某项原文已经是{target}，原样保留。\n"
         "5. 游戏专有名词（职业、技能、道具、装备、现金道具、地图、NPC、活动名等）"
         "优先采用国服《冒险岛》官方简体中文译名（如 Hero=英雄、Paladin=圣骑士、"
@@ -1224,13 +1262,19 @@ def self_test() -> bool:
     check("粗体转**/图片剔除/script跳过",
           "**bold**" in para_text and "x.png" not in para_text and "var x" not in para_text)
 
-    # 链接保留: <a href> 的 URL 应以明文跟在锚文本后(黑盒语音不保证 []() 渲染)
+    # 链接: <a href> 转 Markdown [锚文本](URL)(黑盒语音实测支持渲染, 点击名称跳转)
     link_blk = parse_body(
         '<p>Buy at <a href="https://www.nexon.com/mscw/pre-launch-sales">'
         "the Founder website</a> now.</p>"
     )
-    check("链接 URL 保留为明文",
-          link_blk[0][1] == "Buy at the Founder website (https://www.nexon.com/mscw/pre-launch-sales) now.")
+    check("链接转 [文字](网址)",
+          link_blk[0][1] == "Buy at [the Founder website]"
+                            "(https://www.nexon.com/mscw/pre-launch-sales) now.")
+    empty_link = parse_body('<p>See <a href="https://example.com/"></a> the page</p>')
+    check("空锚文本链接退回明文 URL", empty_link[0][1] == "See (https://example.com/) the page")
+    bold_link = parse_body(
+        '<p><a href="https://n.nexon.com/x"><strong>Hot Time</strong></a></p>')
+    check("链接内粗体标记不泄漏", bold_link[0][1] == "[Hot Time](https://n.nexon.com/x)")
 
     # 结尾署名固定译法(纯本地逻辑, 不触发翻译网络请求)
     sig_blocks, _ = translate_blocks(
