@@ -145,13 +145,16 @@ def apply_terms(text: str) -> str:
 
 
 def _terms_fingerprint() -> str:
-    """术语表指纹(条数 + 文件 mtime): 术语表变更后翻译缓存作废, 避免旧译名滞留。"""
-    mtime = 0.0
+    """术语表指纹(条数 + 文件内容哈希): 术语表内容变更后翻译缓存作废, 避免旧译名滞留。
+    用内容哈希而不是文件 mtime —— GitHub Actions 每次 checkout 都会刷新文件 mtime,
+    用 mtime 会导致指纹每次都变、tr_cache 每次运行都被清空(线上缓存机制失效, 已踩坑 2026-09-04)。"""
+    digest = ""
     try:
-        mtime = os.path.getmtime(TERMS_FILE)
+        with open(TERMS_FILE, "rb") as f:
+            digest = hashlib.sha256(f.read()).hexdigest()[:12]
     except OSError:
         pass
-    return f"{len(TERMS)}-{int(mtime)}"
+    return f"{len(TERMS)}-{digest}"
 
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -775,6 +778,21 @@ SIGNATURE_FIX = {
     "Best regards,": "此致敬礼，",
 }
 
+# 公告开头问候行的固定译法（整行精确匹配后直接使用, 不送翻译引擎）。
+# "Maplers" 是 MapleStory 对玩家群体的称呼(社区自造词, 非词典词), 翻译引擎
+# 偶发会把它当专有名词音译成"梅普勒斯"(实测出现"嗨，梅普勒斯，")。
+# 这里像 SIGNATURE_FIX 一样兜底, 保证开场问候稳定。
+GREETING_FIX = {
+    "Hi Maplers,": "各位冒险家，你们好！",
+    "Hi Maplers!": "各位冒险家，你们好！",
+    "Hello Maplers,": "各位冒险家，你们好！",
+    "Hello Maplers!": "各位冒险家，你们好！",
+    "Hi Maplers": "各位冒险家，你们好！",
+    "Hello Maplers": "各位冒险家，你们好！",
+    "Maplers,": "各位冒险家，",
+    "Maplers!": "各位冒险家！",
+}
+
 
 def translate_blocks(blocks, state=None, title_texts=None):
     """翻译所有块里的文本；返回 (新块列表, 标题译文列表或 None)。翻译失败时保留原文。
@@ -822,6 +840,9 @@ def translate_blocks(blocks, state=None, title_texts=None):
         elif SIGNATURE_FIX.get(raw.strip()) is not None:
             # 结尾署名/客套行: 固定译法, 不依赖翻译引擎(防署名丢失/译歪)
             tr_map[(b, k, li)] = SIGNATURE_FIX[raw.strip()]
+        elif GREETING_FIX.get(raw.strip()) is not None:
+            # 开场问候行(如 Hi Maplers,): 固定译法, 防止引擎把 Maplers 音译成"梅普勒斯"
+            tr_map[(b, k, li)] = GREETING_FIX[raw.strip()]
         elif _should_keep_original(raw):
             tr_map[(b, k, li)] = raw
         else:
@@ -1281,6 +1302,13 @@ def self_test() -> bool:
         [("para", "Thank you,"), ("para", "The MapleStory Team")], None)
     check("结尾署名固定译法(谢谢,/冒险岛团队)",
           [sb[1] for sb in sig_blocks] == ["谢谢，", "冒险岛团队"])
+
+    # 开场问候固定译法(纯本地逻辑; 防 Maplers 被引擎音译成"梅普勒斯")
+    greet_blocks, _ = translate_blocks(
+        [("para", "Hi Maplers,"), ("para", "Hi Maplers!"), ("para", "Maplers,")], None)
+    check("开场问候固定译法(各位冒险家)",
+          [gb[1] for gb in greet_blocks]
+          == ["各位冒险家，你们好！", "各位冒险家，你们好！", "各位冒险家，"])
 
     # 3) 时间/日期行判断
     check("时区行保留(PDT)", _should_keep_original("4:00 PM (PDT): 5:00 PM (PDT)"))
