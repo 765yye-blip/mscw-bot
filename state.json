@@ -1,8 +1,8 @@
 {
-  "pushed_id": "44883",
-  "pushed_hash": "19cd7b8bb706a623",
-  "pushed_at": "2026-09-04 11:55:55",
-  "title": "Founder's Package Purchase Guide",
+  "pushed_id": "44134",
+  "pushed_hash": "56421c3066f2fe6b",
+  "pushed_at": "2026-09-04 12:03:36",
+  "title": "Classic World Founder's Packages Now On Sale!",
   "tr_cache": {
     "With the Founder's Package now available, we would like to explain how purchasing works on Steam and our official webstore so you can choose the option that best suits you.": "随着创始人礼包现已推出，我们想说明一下在 Steam 和我们官方网页商店上的购买方式，以便您选择最适合自己的选项。",
     "On Steam, the Founder's Package is offered as the 扎昆 Package only. Due to Steam's platform policies, package upgrades are not supported the way they are on our own store. To prevent unintended duplicate purchases, we have chosen to offer only the 扎昆 Package, our most complete Founder's package tier on Steam.": "在 Steam 上，创始人礼包仅以扎昆 Package 的形式提供。由于 Steam 平台政策，礼包升级的方式不受支持，不像我们自己的商店那样。为避免意外重复购买，我们选择只在 Steam 上提供扎昆 Package——这是我们最完整的创始人礼包档位。",
@@ -13,12 +13,14 @@
   },
   "tr_cache_ver": "1123-5367571b156e",
   "pushed_map": {
-    "43962": "4c1dc70d4e54df5e"
-
+    "43962": "4c1dc70d4e54df5e",
+    "44883": "19cd7b8bb706a623",
+    "44134": "56421c3066f2fe6b"
   },
   "last_live_date": {
-    "43962": "2026-08-11T11:00:00Z"
-
+    "43962": "2026-08-11T11:00:00Z",
+    "44883": "2026-09-02T14:00:00Z",
+    "44134": "2026-09-02T16:45:00Z"
   },
-  "push_lag_min": 2276
+  "push_lag_min": 2119
 }
