@@ -1,8 +1,8 @@
 {
-  "pushed_id": "45385",
-  "pushed_hash": "0f1f5f9e63243168",
-  "pushed_at": "2026-09-30 08:55:48",
-  "title": "MapleStory Classic World FAQ",
+  "pushed_id": "45521",
+  "pushed_hash": "1fa2c59f5d88ae64",
+  "pushed_at": "2026-09-30 09:01:19",
+  "title": "Founder's Access Pre-Download Instructions Nexon Launcher and Steam",
   "tr_cache": {
     "With the 创始人礼包 now available, we would like to explain how purchasing works on Steam and our official webstore so you can choose the option that best suits you.": "随着创始人礼包现已推出，我们想说明一下在 Steam 和我们的官方网页商店上的购买方式，以便您选择最适合您的选项。",
     "On Steam, the 创始人礼包 is offered as the 扎昆礼包 only. Due to Steam's platform policies, package upgrades are not supported the way they are on our own store. To prevent unintended duplicate purchases, we have chosen to offer only the 扎昆礼包, our most complete 创始人礼包 tier on Steam.": "在 Steam 上，创始人礼包仅以扎昆礼包形式提供。由于 Steam 的平台政策，无法像在我们自己的商店中那样进行礼包升级。为避免意外重复购买，我们只在 Steam 上提供最完整的创始人礼包档位——扎昆礼包。",
@@ -29,7 +29,37 @@
     "To learn more about Global 冒险岛 and Global 冒险岛怀旧服, please visit our official 网页 [HERE](https://www.nexon.com/maplestory/).": "要了解有关国际服冒险岛和国际服冒险岛怀旧服的更多信息，请访问我们的官方网页 [此处](https://www.nexon.com/maplestory/)。",
     "If you become aware of an unauthorized server distributing 冒险岛 content, please report it through our player support 传送口 [HERE](https://support-maplestory.nexon.com/hc/en-us). To those who have already taken the time to report unauthorized servers, thank you. Your efforts genuinely help protect the game and its community, and we hope you will continue to let us know.": "如果你发现未经授权服务器分发冒险岛内容，请通过我们的玩家支持传送口 [此处](https://support-maplestory.nexon.com/hc/en-us) 举报。对于已经花时间举报未经授权服务器的人，谢谢你们。你们的努力确实有助于保护游戏及其社区，我们希望你们继续告知我们。",
     "- The 冒险岛 Team": "- 冒险岛团队",
-    "Maple Memo: Notice Regarding Unauthorized 冒险岛 Servers": "冒险岛备忘录：关于未经授权的冒险岛服务器的通知"
+    "Maple Memo: Notice Regarding Unauthorized 冒险岛 Servers": "冒险岛备忘录：关于未经授权的冒险岛服务器的通知",
+    "Founder’s Access for 冒险岛怀旧服 kicks off on **Tuesday, October 6, 2026 at 11:00 AM PDT (2:00 PM EDT / 8:00 PM CEST / 4:00 AM AEST October 7)**, and we want to ensure you can 跳跃力 into the game the exact moment servers go live! To help you 回避率 long wait times on launch day, here is your essential preparation guide.": "冒险岛怀旧服的创始人资格将于 **2026 年 10 月 6 日星期二太平洋夏令时上午 11:00（美国东部夏令时下午 2:00 / 中欧夏令时晚上 8:00 / 澳大利亚东部标准时间 10 月 7 日凌晨 4:00）** 开启，我们希望确保你能在服务器上线的确切时刻凭借跳跃力进入游戏！为了帮助你在上线日以回避率避开漫长的等待时间，这里是你必备的准备指南。",
+    "Step 1: Choose Your Platform": "第 1 步：选择你的平台",
+    "Before you start prepping your files, it is important to choose the platform that works best for your hard drive space.": "在开始准备文件之前，重要的是选择最适合你硬盘空间的平台。",
+    "Nexon 启动器 (Recommended for 仓库): The official Nexon 启动器 allows you to download 冒险岛怀旧服 as a smaller, standalone 客户端. You do not need to install 冒险岛 to play 冒险岛怀旧服.": "Nexon 启动器（推荐用于仓库）：官方 Nexon 启动器允许你将冒险岛怀旧服下载为更小的独立客户端。你无需安装冒险岛即可游玩冒险岛怀旧服。",
+    "Steam: Due to Steam’s technical framework, 冒险岛 and 冒险岛怀旧服 are packaged together as a single, unified build. This requires a much larger download, as you must install the base game to access 冒险岛怀旧服.": "Steam：由于 Steam 的技术框架，冒险岛和冒险岛怀旧服被打包为一个统一的单一版本。这需要大得多的下载量，因为你必须安装基础游戏才能访问冒险岛怀旧服。",
+    "Step 2: Pre-Download Your Game": "第 2 步：预下载你的游戏",
+    "Once you have chosen your platform, you can start prepping your files today so you aren't 卡住了 downloading on launch day.": "一旦你选择了平台，今天就可以开始准备文件，这样你在上线日就不会下载卡住了。",
+    "Playing via the Nexon 启动器:": "通过 Nexon 启动器游玩：",
+    "Since the 冒险岛怀旧服 game 客户端 cannot be downloaded until launch day, you can save time by getting your Nexon 启动器 ready right now.": "由于冒险岛怀旧服游戏客户端要到上线日才能下载，你现在就可以准备好 Nexon 启动器来节省时间。",
+    "Download and install the official Nexon 启动器 from the Nexon 网页.": "从 Nexon 网页下载并安装官方 Nexon 启动器。",
+    "Log in with your Nexon account.": "使用你的 Nexon 账号登录。",
+    "On Launch Day: Locate 冒险岛 in your library, select the 冒险岛怀旧服 toggle, and download the standalone 客户端.": "上线日：在你的库中找到冒险岛，选择冒险岛怀旧服切换开关，然后下载独立客户端。",
+    "**Note**: The 冒险岛怀旧服 option won’t be available until Founder’s Access launch day.": "**注意**：冒险岛怀旧服选项要到创始人资格上线日才会可用。",
+    "Playing via Steam:": "通过 Steam 游玩：",
+    "Because the games are bundled, having the base game fully installed and updated right now will drastically reduce your required 更新补丁 size when 创始人资格 begins.": "由于这些游戏是捆绑在一起的，现在完全安装并更新基础游戏，将大幅减少创始人资格开始时所需的更新补丁大小。",
+    "Open your Steam Library and locate 冒险岛.": "打开你的 Steam 库并找到冒险岛。",
+    "Click 'Install' and select your preferred drive.": "点击“安装”，然后选择你偏好的驱动器。",
+    "Allow the base download to finish completely and let Steam apply any pending updates.": "让基础下载完全完成，并让 Steam 应用所有待处理的更新。",
+    "**Note: **The 冒险岛怀旧服 option won’t be available until Founder’s Access launch day.": "**注意：**冒险岛怀旧服选项要到创始人资格上线日才会可用。",
+    "Step 3: Prepare and Link Your Account": "第 3 步：准备并关联你的账号",
+    "To play 冒险岛怀旧服 on either platform, you will need a verified Nexon account.": "要在任一平台游玩冒险岛怀旧服，你需要一个已验证的 Nexon 账号。",
+    "If you need a new Nexon account:": "如果你需要一个全新的 Nexon 账号：",
+    "Head to the Nexon 网页 and register.": "前往 Nexon 网页并注册。",
+    "Check your inbox and verify your email address.": "检查你的收件箱并验证你的电子邮箱地址。",
+    "Steam Users: Link Your Accounts": "Steam 用户：关联你的账号",
+    "If you are playing on Steam, your Nexon account must be linked to your Steam profile. We highly recommend doing this now so you are ready for launch.": "如果你在 Steam 上游玩，你的 Nexon 账号必须关联到你的 Steam 个人资料。我们强烈建议现在就完成此操作，以便为开服做好准备。",
+    "**Via Web (Recommended)**: Log into your Nexon account on the official 网页, navigate to your Account Settings, and link your Steam profile directly from your browser without waiting for the game to download.": "**通过网页（推荐）**：在官方网页登录你的 Nexon 账号，前往你的账号设置，并直接从浏览器关联你的 Steam 个人资料，无需等待游戏下载完成。",
+    "**Via Steam**: Launch 冒险岛 through Steam once your download finishes. When prompted, sign in with your Nexon credentials to confirm the link between your accounts.": "**通过 Steam**：下载完成后，通过 Steam 启动冒险岛。出现提示时，使用你的 Nexon 凭据登录，以确认账号之间的关联。",
+    "[Please head to our FAQ page here for more information!](https://www.nexon.com/maplestory/news/general/45385/classic-world-frequently-asked-questions)": "[请前往我们的常见问题解答页面了解更多信息！](https://www.nexon.com/maplestory/news/general/45385/classic-world-frequently-asked-questions)",
+    "创始人资格 Pre-Download Instructions Nexon 启动器 and Steam": "创始人资格预下载说明：Nexon 启动器与 Steam"
   },
   "tr_cache_ver": "1134-8c3205bca8c9",
   "pushed_map": {
@@ -37,14 +67,16 @@
     "44883": "19cd7b8bb706a623",
     "44134": "56421c3066f2fe6b",
     "44825": "495aed3ea53b8d68",
-    "45385": "0f1f5f9e63243168"
+    "45385": "0f1f5f9e63243168",
+    "45521": "1fa2c59f5d88ae64"
   },
   "last_live_date": {
     "43962": "2026-08-11T11:00:00Z",
     "44883": "2026-09-02T14:00:00Z",
     "44134": "2026-09-02T16:45:00Z",
     "44825": "2026-09-11T16:00:00Z",
-    "45385": "2026-09-29T17:00:00Z"
+    "45385": "2026-09-29T17:00:00Z",
+    "45521": "2026-09-29T17:52:00Z"
   },
-  "push_lag_min": 476
+  "push_lag_min": 429
 }
