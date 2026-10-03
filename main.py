@@ -768,7 +768,8 @@ def _deepseek_call(texts, tl="zh-CN"):
         "（绝不能译成“字符/文字”），class 是“职业”、job advancement 是“转职”、"
         "damage 是“伤害”、slot 是“升级次数/栏位”。\n"
         "7. Mapler/Maplers 是 MapleStory 对玩家的称呼（社区自造词，等同于“冒险家/玩家”），"
-        "必须译成“冒险家”或“玩家”，绝对不能音译成“梅普勒斯”之类的人名。\n"
+        "单数 Mapler 必须译成“冒险家”、复数 Maplers 译成“冒险家们”，也可用“玩家”，"
+        "绝对不能音译成“梅普勒斯”之类的人名。\n"
         "8. 文本里形如 ⟦NPC1⟧、⟦NPC2⟧ 的记号是**不可翻译的 NPC 名占位符**："
         "必须把它原样、完整地保留在译文的对应位置，不得翻译、不得改写、不得增删"
         "括号或编号、不得把它当成普通文字处理；译文里保留多少个，就说明有多少个 NPC 名。\n\n"
@@ -1456,8 +1457,8 @@ def self_test() -> bool:
     check("character 译作角色",
           apply_terms("create a character") == "create a 角色"
           and apply_terms("3 Characters") == "3 角色")
-    check("Mapler/Maplers 译作冒险家",
-          apply_terms("other Maplers") == "other 冒险家"
+    check("Mapler 译作冒险家 / Maplers 译作冒险家们",
+          apply_terms("other Maplers") == "other 冒险家们"
           and apply_terms("every kind of Mapler") == "every kind of 冒险家")
 
     # NPC 名保护: 译文中保留英文原文, 术语替换也不碰(2026-10-04 需求)
