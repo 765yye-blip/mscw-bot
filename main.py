@@ -126,6 +126,35 @@ def _load_terms_file(path: str, required: bool = False, quiet: bool = False) -> 
 TERMS = _load_terms_file(TERMS_EXTRA_FILE, quiet=not bool(os.environ.get("TERMS_EXTRA_FILE")))
 TERMS.update(_load_terms_file(TERMS_FILE, required=True))
 
+# ---- NPC 名保护表: 名单里的名字在译文里保留英文原文(不翻译、也不被术语替换) ----
+# npc.json 是 JSON 数组, 如 ["Dances with Balrog", "Athena Pierce"], 可自行增删。
+# 机制: 送引擎前把 NPC 名换成 ⟦NPC1⟧ 形式的占位符, 译文里再回填英文原名
+# (见 _mask_npcs / _unmask_npcs); apply_terms 也会跳过这些名字。
+NPC_FILE = os.environ.get(
+    "NPC_FILE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "npc.json")
+)
+
+
+def _load_npc_names(path: str) -> list:
+    """读 NPC 保护名单(JSON 数组; 也兼容 {"名字": ...} 的字典写法)。文件不存在=功能关闭。"""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return []
+    except Exception as e:
+        print(f"[warn] NPC 名单加载失败({path}): {e}, 跳过 NPC 名保护", flush=True)
+        return []
+    if isinstance(data, dict):
+        data = [k for k in data if not str(k).startswith("_")]
+    return [str(x).strip() for x in data if str(x).strip()]
+
+
+NPC_NAMES = _load_npc_names(NPC_FILE)
+if NPC_NAMES:
+    print(f"[info] NPC 保护表 {len(NPC_NAMES)} 条(译文中保留英文原文)", flush=True)
+
+
 
 # 预编译术语正则(启动时一次): 长词优先, 词边界匹配。
 # 避免 apply_terms 每次调用都现编译上千条正则(每轮运行可省约 1 秒)
@@ -135,13 +164,90 @@ _TERM_PATTERNS = [
 ]
 
 
-def apply_terms(text: str) -> str:
-    """把美服英文术语替换为国服冒险岛中文译名(词边界匹配, 长词优先)。"""
-    if not _TERM_PATTERNS:
-        return text
+# 术语替换必须绕开网址。词边界匹配对网址内部同样成立: "discord.gg/maplestory" 里
+# discord 的前后是 "/" 和 "."(都不是 \w), 会被替换成 "Discord群.gg/maplestory",
+# 链接直接失效(45621 实测"官方http://Discord群.gg/maplestory"); 同理任何术语
+# 只要出现在网址路径里都会被改坏。这里先把网址整段挖出来原样保留, 只对非网址片段替换。
+_URL_RE = re.compile(
+    r"(?:https?://|www\.)[^\s<>\"')\]}，。；：、）】》]+"   # 裸网址 / Markdown 链接括号内网址
+    r"|(?<=\()//[^\s)]+",                                # 协议相对地址 //example.com
+    re.IGNORECASE,
+)
+
+
+def _sub_terms(text: str) -> str:
+    """对一段纯文本(不含网址/NPC 名)执行术语替换。"""
     for pat, zh in _TERM_PATTERNS:
         text = pat.sub(zh, text)
     return text
+
+
+# NPC 名单合并成一条正则(长词优先, 词边界匹配), 用于术语替换豁免 + 翻译占位
+_NPC_RE = (
+    re.compile("|".join(r"(?<![\w])" + re.escape(n) + r"(?![\w])"
+                        for n in sorted(NPC_NAMES, key=len, reverse=True)))
+    if NPC_NAMES else None
+)
+
+
+def _protected_spans(text: str):
+    """术语替换必须绕开的片段: 网址 + NPC 名(在译文里保留英文原文)。"""
+    spans = [m.span() for m in _URL_RE.finditer(text)]
+    if _NPC_RE is not None:
+        spans.extend(m.span() for m in _NPC_RE.finditer(text))
+    spans.sort()
+    return spans
+
+
+def apply_terms(text: str) -> str:
+    """把美服英文术语替换为国服冒险岛中文译名(词边界匹配, 长词优先; 网址与 NPC 名跳过)。"""
+    if not _TERM_PATTERNS:
+        return text
+    out, last = [], 0
+    for start, end in _protected_spans(text):
+        if start < last:                    # 重叠片段(理论上不会出现): 跳过, 避免重复输出
+            continue
+        out.append(_sub_terms(text[last:start]))
+        out.append(text[start:end])         # 网址/NPC 名整段原样保留, 绝不参与术语替换
+        last = end
+    out.append(_sub_terms(text[last:]))
+    return "".join(out)
+
+
+# 占位符回填用的宽松匹配: 容忍模型写成 "⟦ NPC 1 ⟧"/"【NPC1】"/全角数字等变体
+_NPC_TOKEN_RE = re.compile(r"[⟦【\[]\s*NPC\s*([0-9０-９]+)\s*[⟧】\]]", re.IGNORECASE)
+_FULLWIDTH_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789")
+
+
+def _mask_npcs(text: str):
+    """把 NPC 名换成 ⟦NPC1⟧ 形式的占位符, 返回 (掩码文本, {占位符: 英文原名})。
+    用数学括号 ⟦⟧ 是避免和正文里 [文字](网址) 的链接语法冲突。"""
+    if _NPC_RE is None or not text:
+        return text, {}
+    mapping = {}
+
+    def _repl(m):
+        tok = "⟦NPC%d⟧" % (len(mapping) + 1)
+        mapping[tok] = m.group(0)
+        return tok
+
+    return _NPC_RE.sub(_repl, text), mapping
+
+
+def _unmask_npcs(text: str, mapping: dict):
+    """把译文里的占位符换回英文原名, 返回 (文本, 缺失的英文名列表)。
+    模型偶尔会吃掉/改写占位符, 缺失的由调用方兜底(整行退回英文原文), 避免 NPC 名凭空消失。"""
+    if not mapping:
+        return text, []
+    text = _NPC_TOKEN_RE.sub(
+        lambda m: "⟦NPC%s⟧" % m.group(1).translate(_FULLWIDTH_DIGITS), text)
+    missing = []
+    for tok, name in mapping.items():
+        if tok in text:
+            text = text.replace(tok, name)
+        else:
+            missing.append(name)
+    return text, missing
 
 
 def _terms_fingerprint() -> str:
@@ -657,7 +763,15 @@ def _deepseek_call(texts, tl="zh-CN"):
         "只有完全不含英文字母的行才原样保留。\n"
         "5. 游戏专有名词（职业、技能、道具、装备、现金道具、地图、NPC、活动名等）"
         "优先采用国服《冒险岛》官方简体中文译名（如 Hero=英雄、Paladin=圣骑士、"
-        "Cash Shop=商城、Meso=金币），不要自创译名或逐词直译。\n\n"
+        "Cash Shop=商城、Meso=金币），不要自创译名或逐词直译。\n"
+        "6. 注意多义词在该语境下的固定含义：character/characters 一律译作“角色”"
+        "（绝不能译成“字符/文字”），class 是“职业”、job advancement 是“转职”、"
+        "damage 是“伤害”、slot 是“升级次数/栏位”。\n"
+        "7. Mapler/Maplers 是 MapleStory 对玩家的称呼（社区自造词，等同于“冒险家/玩家”），"
+        "必须译成“冒险家”或“玩家”，绝对不能音译成“梅普勒斯”之类的人名。\n"
+        "8. 文本里形如 ⟦NPC1⟧、⟦NPC2⟧ 的记号是**不可翻译的 NPC 名占位符**："
+        "必须把它原样、完整地保留在译文的对应位置，不得翻译、不得改写、不得增删"
+        "括号或编号、不得把它当成普通文字处理；译文里保留多少个，就说明有多少个 NPC 名。\n\n"
         + json.dumps(texts, ensure_ascii=False)
     )
     payload = {
@@ -810,6 +924,23 @@ GREETING_FIX = {
     "Maplers!": "各位冒险家！",
 }
 
+# 行首问候前缀: 官网 2026-10-03 起把问候语和正文合并进同一段
+# (实测 45621: "Hi Maplers! Welcome to the Global MapleStory Classic World ..."),
+# 整行精确匹配(GREETING_FIX)不再命中, 整段连同 Maplers 送引擎 -> 音译成"梅普勒斯"。
+# 这里按行首前缀命中: 前缀换成固定中文问候, 其余正文照常走翻译。
+_GREETING_PREFIX_RE = re.compile(
+    r"^(?:Hi|Hello|Hey|Greetings|Dear)[,]?\s+Maplers?\b[!,.]?\s*", re.IGNORECASE
+)
+
+
+def _fix_greeting_prefix(text: str):
+    """行首为问候语(Hi/Hello/Hey/Greetings/Dear + Maplers)时, 把问候前缀换成固定译法,
+    返回替换后的整行; 不是问候行返回 None(调用方保持原逻辑)。"""
+    m = _GREETING_PREFIX_RE.match(text)
+    if not m:
+        return None
+    return "各位冒险家，你们好！" + text[m.end():]
+
 
 def translate_blocks(blocks, state=None, title_texts=None):
     """翻译所有块里的文本；返回 (新块列表, 标题译文列表或 None)。翻译失败时保留原文。
@@ -840,12 +971,23 @@ def translate_blocks(blocks, state=None, title_texts=None):
     # 注意: 替换后已不含英文字母的行(纯中文术语/数字/符号)不再送翻译引擎,
     #       避免中文术语被翻译服务二次加工(如 风之前跃 -> 风先于跃)
     tr_map = {}
-    need_units = []  # (bi, kind, li, 待翻译文本)
+    need_units = []  # (bi, kind, li, 掩码后待翻译文本, {占位符: NPC名}, 原始文本)
+
+    def _need(b, k, li, text, raw):
+        """登记一个待翻译单元: 先给 NPC 名打占位符(译文里回填英文原文),
+        掩码后若已无英文(整行就是 NPC 名/数字/符号)则不送引擎, 直接用原文,
+        免得模型对着一个孤零零的占位符乱猜。"""
+        masked, mapping = _mask_npcs(text)
+        if not re.search(r"[A-Za-z]", masked):
+            tr_map[(b, k, li)] = text
+            return
+        need_units.append((b, k, li, masked, mapping, raw))
+
     for (b, k, li, raw, rep) in units:
         if k == "title":
             tr_map[(b, k, li)] = rep
             if re.search(r"[A-Za-z]", rep):
-                need_units.append((b, k, li, rep))
+                _need(b, k, li, rep, raw)
         elif k == "heading":
             ov = HEADING_OVERRIDES.get(raw.strip(), None)
             if ov is not None:
@@ -853,7 +995,7 @@ def translate_blocks(blocks, state=None, title_texts=None):
             else:
                 tr_map[(b, k, li)] = rep
                 if re.search(r"[A-Za-z]", rep):
-                    need_units.append((b, k, li, rep))
+                    _need(b, k, li, rep, raw)
         elif SIGNATURE_FIX.get(raw.strip()) is not None:
             # 结尾署名/客套行: 固定译法, 不依赖翻译引擎(防署名丢失/译歪)
             tr_map[(b, k, li)] = SIGNATURE_FIX[raw.strip()]
@@ -863,9 +1005,14 @@ def translate_blocks(blocks, state=None, title_texts=None):
         elif _should_keep_original(raw):
             tr_map[(b, k, li)] = raw
         else:
+            # 行首问候语与正文同段时(2026-10-03 起官网的写法), 整行精确匹配失效:
+            # 先把问候前缀固定成中文, 其余英文照常送翻译引擎
+            greeted = _fix_greeting_prefix(raw)
+            if greeted is not None:
+                rep = apply_terms(greeted)
             tr_map[(b, k, li)] = rep
             if re.search(r"[A-Za-z]", rep):
-                need_units.append((b, k, li, rep))
+                _need(b, k, li, rep, raw)
 
     if need_units:
         need_texts = [u[3] for u in need_units]
@@ -875,7 +1022,14 @@ def translate_blocks(blocks, state=None, title_texts=None):
             translated = _translate_deepseek_batch(need_texts)
             if translated is None:
                 translated = _translate_google_batch(need_texts, force=True)
-        for (b, k, li, _rep), tr in zip(need_units, translated):
+        for (b, k, li, _masked, mapping, raw), tr in zip(need_units, translated):
+            tr, missing = _unmask_npcs(tr, mapping)
+            if missing:
+                # 占位符被模型吃掉/改写: 整行退回英文原文。宁可这一行不译,
+                # 也不能让 NPC 名凭空消失或变成中文译名(2026-10-04 需求)。
+                print(f"[warn] NPC 占位符丢失({', '.join(missing)}), 该行保留英文原文: "
+                      f"{raw[:60]}", flush=True)
+                tr = raw
             tr_map[(b, k, li)] = tr
 
     # 用翻译结果重建块: 建立 (bi, kind, li) -> 翻译文本 的映射
@@ -1290,6 +1444,42 @@ def self_test() -> bool:
     t = apply_terms("I am a Hero in the MapleStory Classic World.")
     check("术语替换(英雄/冒险岛怀旧服)", "英雄" in t and "冒险岛怀旧服" in t)
     check("术语边界(不误替换 Heroine)", "英雄ine" not in apply_terms("Heroine"))
+    # 术语替换不得改写网址(45621 实测: discord.gg -> Discord群.gg, 链接失效)
+    u = apply_terms("Join our official [MapleStory Discord](http://discord.gg/maplestory) now.")
+    check("术语替换不改写 Markdown 链接网址",
+          "http://discord.gg/maplestory" in u and "Discord群.gg" not in u)
+    check("术语替换不改写裸网址",
+          apply_terms("see https://discord.com/invite/x") == "see https://discord.com/invite/x")
+    check("网址之外的术语照常替换",
+          "冒险岛" in apply_terms("Join MapleStory at https://discord.gg/maplestory"))
+    # 多义词/社区自造词(45621: character 译成"字符"、Maplers 音译成"梅普勒斯")
+    check("character 译作角色",
+          apply_terms("create a character") == "create a 角色"
+          and apply_terms("3 Characters") == "3 角色")
+    check("Mapler/Maplers 译作冒险家",
+          apply_terms("other Maplers") == "other 冒险家"
+          and apply_terms("every kind of Mapler") == "every kind of 冒险家")
+
+    # NPC 名保护: 译文中保留英文原文, 术语替换也不碰(2026-10-04 需求)
+    print(f"[self-test] NPC 保护表 {len(NPC_NAMES)} 条", flush=True)
+    check("术语替换不碰 NPC 名",
+          apply_terms("talk to Dances with Balrog in Perion")
+          == "talk to Dances with Balrog in 勇士部落")
+    check("NPC 名占位符(单个)",
+          _mask_npcs("Talk to Dark Lord.") == ("Talk to ⟦NPC1⟧.", {"⟦NPC1⟧": "Dark Lord"}))
+    masked, mp = _mask_npcs("Talk to Dark Lord, then Athena Pierce.")
+    check("NPC 名占位符(多个, 按出现顺序编号)",
+          masked == "Talk to ⟦NPC1⟧, then ⟦NPC2⟧."
+          and mp == {"⟦NPC1⟧": "Dark Lord", "⟦NPC2⟧": "Athena Pierce"})
+    check("占位符回填英文原文",
+          _unmask_npcs("与⟦NPC1⟧对话。", {"⟦NPC1⟧": "Dark Lord"})[0] == "与Dark Lord对话。")
+    check("占位符宽松回填(容忍空格)",
+          _unmask_npcs("与⟦ NPC 1 ⟧对话。", {"⟦NPC1⟧": "Dark Lord"}) == ("与Dark Lord对话。", []))
+    check("占位符宽松回填(容忍【】与全角数字)",
+          _unmask_npcs("与【NPC１】对话。", {"⟦NPC1⟧": "Dark Lord"}) == ("与Dark Lord对话。", []))
+    check("占位符丢失可被侦测(调用方退回英文原文)",
+          _unmask_npcs("与某人对话。", {"⟦NPC1⟧": "Dark Lord"}) == ("与某人对话。", ["Dark Lord"]))
+    check("非 NPC 文本不受影响", _mask_npcs("Hello Maplers!") == ("Hello Maplers!", {}))
 
     # 2) HTML 解析 + 小标题识别
     html = ("<h2><strong>Times:</strong></h2>"
@@ -1342,6 +1532,16 @@ def self_test() -> bool:
     check("开场问候固定译法(各位冒险家)",
           [gb[1] for gb in greet_blocks]
           == ["各位冒险家，你们好！", "各位冒险家，你们好！", "各位冒险家，"])
+    # 问候语与正文合并成一段(2026-10-03 官网写法): 按行首前缀吃掉问候语
+    # (纯本地函数, 不走网络, 保证 self-test 全程离线)
+    check("行首问候前缀固定译法",
+          _fix_greeting_prefix("Hi Maplers! Welcome to Classic World!")
+          == "各位冒险家，你们好！Welcome to Classic World!")
+    check("行首问候前缀(Hello, Maplers)",
+          _fix_greeting_prefix("Hello, Maplers! We are back.")
+          == "各位冒险家，你们好！We are back.")
+    check("非问候行不误伤", _fix_greeting_prefix("Welcome, Maplers!") is None
+          and _fix_greeting_prefix("Him Maplers!") is None)
 
     # 3) 时间/日期行判断
     check("时区行保留(PDT)", _should_keep_original("4:00 PM (PDT): 5:00 PM (PDT)"))
