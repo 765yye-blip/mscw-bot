@@ -1,8 +1,8 @@
 {
-  "pushed_id": "45521",
-  "pushed_hash": "1fa2c59f5d88ae64",
-  "pushed_at": "2026-09-30 09:01:19",
-  "title": "Founder's Access Pre-Download Instructions Nexon Launcher and Steam",
+  "pushed_id": "45621",
+  "pushed_hash": "caeab07120e27e53",
+  "pushed_at": "2026-10-04 05:04:50",
+  "title": "Founder's Access Release Notes",
   "tr_cache": {
     "With the 创始人礼包 now available, we would like to explain how purchasing works on Steam and our official webstore so you can choose the option that best suits you.": "随着创始人礼包现已推出，我们想说明一下在 Steam 和我们的官方网页商店上的购买方式，以便您选择最适合您的选项。",
     "On Steam, the 创始人礼包 is offered as the 扎昆礼包 only. Due to Steam's platform policies, package upgrades are not supported the way they are on our own store. To prevent unintended duplicate purchases, we have chosen to offer only the 扎昆礼包, our most complete 创始人礼包 tier on Steam.": "在 Steam 上，创始人礼包仅以扎昆礼包形式提供。由于 Steam 的平台政策，无法像在我们自己的商店中那样进行礼包升级。为避免意外重复购买，我们只在 Steam 上提供最完整的创始人礼包档位——扎昆礼包。",
@@ -68,7 +68,8 @@
     "44134": "56421c3066f2fe6b",
     "44825": "495aed3ea53b8d68",
     "45385": "0f1f5f9e63243168",
-    "45521": "1fa2c59f5d88ae64"
+    "45521": "1fa2c59f5d88ae64",
+    "45621": "caeab07120e27e53"
   },
   "last_live_date": {
     "43962": "2026-08-11T11:00:00Z",
@@ -76,7 +77,8 @@
     "44134": "2026-09-02T16:45:00Z",
     "44825": "2026-09-11T16:00:00Z",
     "45385": "2026-09-29T17:00:00Z",
-    "45521": "2026-09-29T17:52:00Z"
+    "45521": "2026-09-29T17:52:00Z",
+    "45621": "2026-10-03T13:30:00Z"
   },
-  "push_lag_min": 429
+  "push_lag_min": 455
 }
