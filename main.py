@@ -19,6 +19,9 @@ MapleStory Classic World（冒险岛美服怀旧服）公告推送机器人
   DEEPSEEK_MODEL                DeepSeek 模型名（默认 deepseek-v4-flash）
   DRY_RUN                       1 = 只打印排版结果不推送（默认 0）
   STATE_FILE                    状态文件路径（默认 ./state.json）
+  GITHUB_REPOSITORY             由 Actions 自动注入(owner/repo): 推送前用它只读复查线上
+                                state.json, 别的 run 已推过同一版本就跳过; 本地不设=跳过复查
+  STATE_BRANCH                  复查所用分支（默认 main）；STATE_TOKEN 可选, 有则带鉴权
   MAX_MSG_LEN                   单条消息最大长度(字符), 超出自动拆成多条（默认 1500）
   MAX_MSG_BYTES                 单条消息最大长度(UTF-8 字节), 0=不启用（默认 0;
                                 若黑盒接口按字节限长可设置, 拆条时字符/字节双限制同时满足）
@@ -37,6 +40,7 @@ MapleStory Classic World（冒险岛美服怀旧服）公告推送机器人
   LAG_ALERT_MIN                 发布(liveDate)到推送成功的时间差超过该分钟数时打告警日志（默认 30）
 """
 
+import base64
 import hashlib
 import json
 import os
@@ -1286,6 +1290,62 @@ def content_hash(article: dict, detail: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
+# 并发兜底: 推送前复查线上 state.json
+# ---------------------------------------------------------------------------
+# 背景: workflow 由 cron 每 5 分钟触发, schedule 事件的 run 默认绑定"触发那一刻"的
+# 提交。当上一轮刚推完、state.json 还没回写时, 排队中的这一轮会读到旧状态, 把同一条
+# 公告再推一遍(2026-10-04 #12973/#12974 绑定同一个 head c3a5b253, 实测重复推送)。
+# 修复分两层: workflow 侧固定 checkout ref: main(治本), 这里再复查一次远端状态(兜底)。
+# 用只读接口, 未配置仓库信息或任何异常都静默降级, 绝不影响正常推送。
+GITHUB_REPO = os.environ.get("GITHUB_REPOSITORY", "")   # Actions 自动注入, 形如 owner/repo
+STATE_BRANCH = os.environ.get("STATE_BRANCH", "main")
+_REMOTE_STATE = {"tried": False, "state": None}
+
+
+def fetch_remote_state(repo=None, branch=None):
+    """只读拉取线上 state.json 并解析; 取不到(未配置/限流/网络)时返回 None。"""
+    repo = GITHUB_REPO if repo is None else repo
+    if not repo:
+        return None
+    url = (f"https://api.github.com/repos/{repo}/contents/state.json"
+           f"?ref={branch or STATE_BRANCH}")
+    headers = {"User-Agent": UA, "Accept": "application/vnd.github+json",
+               "Cache-Control": "no-cache"}
+    tok = os.environ.get("STATE_TOKEN", "")
+    if tok:
+        headers["Authorization"] = "Bearer " + tok
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            info = json.loads(resp.read().decode("utf-8", "replace"))
+        return json.loads(base64.b64decode(info.get("content") or "").decode("utf-8"))
+    except Exception as e:
+        print(f"[warn] 复查远端 state.json 失败({e}), 本轮按本地状态判断", flush=True)
+        return None
+
+
+def _remote_same(remote_state, sid: str, h: str) -> bool:
+    """远端状态里是否已记录该公告的同一内容哈希(纯函数, 便于自检)。"""
+    if not isinstance(remote_state, dict):
+        return False
+    return str((remote_state.get("pushed_map") or {}).get(str(sid), "")) == str(h)
+
+
+def remote_pushed_same(sid: str, h: str) -> bool:
+    """本轮要推的公告是否已被线上状态记录(每轮只查一次, 结果缓存复用)。"""
+    if not _REMOTE_STATE["tried"]:
+        _REMOTE_STATE["tried"] = True
+        _REMOTE_STATE["state"] = fetch_remote_state()
+        rs = _REMOTE_STATE["state"]
+        if isinstance(rs, dict):
+            print("[info] 推送前复查远端 state.json: 已同步 "
+                  f"{len(rs.get('pushed_map') or {})} 条推送记录", flush=True)
+        else:
+            print("[info] 推送前复查远端 state.json: 不可用, 本轮按本地状态判断", flush=True)
+    return _remote_same(_REMOTE_STATE["state"], sid, h)
+
+
+# ---------------------------------------------------------------------------
 # 主流程
 # ---------------------------------------------------------------------------
 def main():
@@ -1348,6 +1408,14 @@ def main():
             continue
         if prev_hash is not None and not PUSH_ON_CONTENT_UPDATE:
             print(f"[info] id={sid} 内容有更新, 但已配置 PUSH_ON_CONTENT_UPDATE=0, 不重推", flush=True)
+            continue
+
+        # 并发兜底: 本地快照可能落后于线上(见 fetch_remote_state 处的说明)。发送前复查
+        # 远端状态, 别的 run 已记录同一版本就不再推, 省掉翻译开销也避免频道重复刷屏;
+        # 复查不可用时按原有逻辑继续, 不影响正常推送。
+        if not DRY_RUN and remote_pushed_same(sid, h):
+            print(f"[info] id={sid} 远端 state.json 已记录同一版本(其他 run 刚推过), "
+                  f"本轮跳过以免重复推送", flush=True)
             continue
 
         # 解析 + 翻译 + 排版
@@ -1643,6 +1711,14 @@ def self_test() -> bool:
     many = [{"id": i, "liveDate": f"2026-08-14T10:{i:02d}:00Z", "name": str(i)}
             for i in range(20)]
     check("MAX_NEWS_PER_RUN 限制条数", len(select_pending(many, {}, now=now)) == MAX_NEWS_PER_RUN)
+
+    # 推送前远端复查(并发兜底): 纯本地可验证的部分
+    check("远端复查: 未配置仓库信息时不联网查", fetch_remote_state(repo="") is None)
+    check("远端复查: 远端同哈希=重复, 异哈希/无记录=不重复",
+          _remote_same({"pushed_map": {"45621": "abc"}}, "45621", "abc")
+          and not _remote_same({"pushed_map": {"45621": "abc"}}, "45621", "def")
+          and not _remote_same({}, "45621", "abc")
+          and not _remote_same(None, "45621", "abc"))
 
     print(("[self-test] 结果: " + ("全部通过" if ok else "存在失败")), flush=True)
     return ok
