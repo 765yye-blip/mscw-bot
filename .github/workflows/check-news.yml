@@ -26,6 +26,12 @@ jobs:
       - name: Checkout
         # v5 基于 Node 24, 消除 "Node.js 20 is deprecated" 警告
         uses: actions/checkout@v5
+        with:
+          # schedule 事件默认把 run 绑定到"触发那一刻"的 commit: 上一轮刚推送完但还没
+          # 回写 state.json 时, 排队中的这一轮会读到旧状态, 把同一公告再推一遍
+          # (2026-10-04 #12973/#12974 的 head 都是 c3a5b253 就是这个原因)。
+          # 固定 ref: main, 配合上面的 concurrency 串行, 让每轮都用最新状态启动。
+          ref: main
 
       - name: Validate terms.json + self-test
         # 离线冒烟自检(术语表语法/解析/时间行/拆条/多公告选择), 任一失败直接让工作流失败,
@@ -60,6 +66,14 @@ jobs:
             echo "::notice::state.json 无变化, 本次没有新公告"
           else
             git commit -m "chore: 更新已推送公告状态 $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            # 先同步远端再推: 否则远端已被别的 run 推进时会 push 被拒(fetch first),
+            # 整轮变失败且状态回写丢失(2026-10-04 #12969/#12974 即如此)。
+            git fetch origin main
+            git rebase origin/main || {
+              echo "::warning::state.json 回写冲突, 改用远端最新状态, 下轮会重新判定"
+              git rebase --abort
+              git reset --hard origin/main
+            }
             git push
             echo "::notice::已记录最新公告状态"
           fi
