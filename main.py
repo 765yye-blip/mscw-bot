@@ -1609,6 +1609,22 @@ def fix_bold_balance(text: str) -> str:
 #    markdown 图片 ![](URL) 被服务端拒("图片链接地址不合法"); 单条上限约 10000 字符。
 #    段落间用 \n\n 换行; 列表项之间用"行尾两空格 + \n"硬换行(单 \n 会被挤成一行)
 # ---------------------------------------------------------------------------
+def original_link(article: dict) -> str:
+    """公告的『原文链接』。
+
+    必须用新站详情页路由 /maplestory/news/{category}/{id}:
+    旧域名 maplestory.nexon.net/news/{id} 是『旧 ID -> 新站』的跳转页, 只收录旧站 ID,
+    新 ID(如 45621)不在映射表里, 点开只会落到新闻列表页(2026-10-05 实测)。
+    seo 段在路由里是可选的(/:newsCategory/:newsId/:seo?), 这里不猜 slug, 只用分类+ID。
+    详情缺 category 时退回旧链接, 至少还能定位到公告 ID。
+    """
+    nid = article.get("id")
+    cat = (article.get("category") or "").strip()
+    if cat and nid:
+        return f"https://www.nexon.com/maplestory/news/{cat}/{nid}"
+    return f"https://maplestory.nexon.net/news/{nid}"
+
+
 def build_message_parts(article: dict, blocks) -> list:
     """生成消息分片列表（每个分片是一个独立段落串），再交给 chunk 拆条。"""
     parts = []
@@ -1631,7 +1647,7 @@ def build_message_parts(article: dict, blocks) -> list:
     # 头部元信息压成两行: 原来作者/时间/链接各占一行, 头部比正文还长
     parts.append(f"**作者**：{AUTHOR_NAME}｜**发布时间**：{pub_bj}（{tz_display}）")
     # 原文链接: 配图不展示时, 这是读者看图的唯一入口
-    parts.append(f"**原文链接**：https://maplestory.nexon.net/news/{article.get('id')}")
+    parts.append(f"**原文链接**：{original_link(article)}")
     cover = img_line(normalize_img_url(article.get("imageThumbnail") or ""), "查看封面图")
     if cover:
         parts.append(cover)
