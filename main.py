@@ -227,6 +227,29 @@ def _sub_terms(text: str) -> str:
     return text
 
 
+# 译文侧修正(中文 -> 中文): 翻译引擎把专有名词译成了非国服的叫法时, 在这里钉回官方译名。
+# 术语表本身也已按国服译名(Orange Mushroom -> 花蘑菇); 这里再兜一层: 引擎/缓存里残留的
+# 误译(橙色蘑菇等)在消息拼装阶段统一纠正, 缓存命中的旧译文同样生效。
+ZH_FIX = [
+    # Orange Mushroom: 国服官方译名是「花蘑菇」(2026-10-05 需求: 以后一律用花蘑菇)。
+    # 只匹配橙/橘开头的误译; 蘑菇王(Mushmom)/蘑菇仔(Shroom)/僵尸蘑菇/绿蘑菇 等不受影响。
+    (r"(?:橙|橘)色?蘑菇", "花蘑菇"),
+    (r"Orange\s+Mushrooms?", "花蘑菇"),          # Orange Mushroom: 国服译名
+]
+
+_ZH_PATTERNS = [
+    (re.compile(pat, re.IGNORECASE), good)
+    for pat, good in ZH_FIX
+]
+
+
+def apply_zh_fix(text: str) -> str:
+    """对已经译成中文的文本做中文侧修正(如 橙色蘑菇/Orange Mushroom -> 花蘑菇)。"""
+    for pat, good in _ZH_PATTERNS:
+        text = pat.sub(good, text)
+    return text
+
+
 # NPC 名单合并成一条正则(长词优先, 词边界匹配), 用于术语替换豁免 + 翻译占位
 _NPC_RE = (
     re.compile("|".join(r"(?<![\w])" + re.escape(n) + r"(?![\w])"
@@ -1030,13 +1053,52 @@ _BJ_MONTH = {
     "november": 11, "december": 12,
 }
 _BJ_TZ_ALT = "|".join(sorted(_BJ_TZ_OFFSET, key=len, reverse=True))
-_BJ_MON_ALT = "|".join(sorted(_BJ_MONTH, key=len, reverse=True))
+# 月份缩写(官网常写 "Oct. 23"/"Nov. 3")
+_BJ_MON_ABBR = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+    "jul": 7, "aug": 8, "sep": 9, "sept": 9, "oct": 10, "nov": 11,
+    "dec": 12,
+}
+_BJ_MON_ALT = "|".join(sorted(
+    [k + r"\.?" for k in _BJ_MON_ABBR] + list(_BJ_MONTH),
+    key=len, reverse=True))
+
+
+def _bj_month(name):
+    """月份名(全称/缩写/带点写法) -> 月份数字; 认不出来返回 None。"""
+    if not name:
+        return None
+    key = name.strip().rstrip(".").lower()
+    return _BJ_MONTH.get(key) or _BJ_MON_ABBR.get(key)
+
+
+def _bj_date_parts(dm):
+    """从日期匹配里取出 (月, 日, 年或 None); 支持 "Oct. 23, 2026" / "8/11"。"""
+    if dm.group("nmon"):
+        return int(dm.group("nmon")), int(dm.group("nday")), None
+    return (_bj_month(dm.group("mon")), int(dm.group("day")),
+            int(dm.group("year")) if dm.group("year") else None)
 _BJ_CLOCK = r"(?P<h>\d{1,2}):(?P<mi>\d{2})\s*(?P<ap>AM|PM)"
 _BJ_DT_RE = re.compile(
     r"\b(?P<mon>%s)\s+(?P<day>\d{1,2}),\s*(?P<year>\d{4})\s*(?:at\s+)?%s\s*(?P<tz>%s)\b"
     % (_BJ_MON_ALT, _BJ_CLOCK, _BJ_TZ_ALT), re.IGNORECASE)
 _BJ_CLOCK_RE = re.compile(r"%s\s*(?P<tz>%s)\b" % (_BJ_CLOCK, _BJ_TZ_ALT),
                           re.IGNORECASE)
+# 纯日期(月份简称/数字写法均可, 年份可选): 给「只有时刻」的括号补月日时用
+_BJ_DATE_ONLY_RE = re.compile(
+    r"\b(?:(?P<mon>%s)\s+(?P<day>\d{1,2})(?:\s*,?\s*(?P<year>\d{4}))?"
+    r"|(?P<nmon>\d{1,2})/(?P<nday>\d{1,2}))"
+    % _BJ_MON_ALT, re.IGNORECASE)
+# 日期与时刻之间只允许这些连接字符(空白/逗号/at/加粗记号), 否则不认(宁缺勿错):
+# "November 3, 11:59 PM UTC" / "Nov. 3 at 11:59 PM UTC" / "August 11, 2026** at 4:00 PM PDT"
+# / "October 12, 2026 | Time: 12:00 AM UTC" 算,
+# "...October 14 is the deadline. Items expire 11:59 PM UTC" 不算。
+_BJ_FILLER = r"[\s,;:，、*_~]"
+_BJ_GAP_BEFORE_RE = re.compile(
+    r"%s*(?:\|\s*time\s*:)?%s*(?:at%s+)?$" % ((_BJ_FILLER,) * 3),
+    re.IGNORECASE)
+_BJ_GAP_AFTER_RE = re.compile(
+    r"^%s*(?:,?%s*on%s+|,%s*|at%s+)" % ((_BJ_FILLER,) * 5), re.IGNORECASE)
 _BJ_RANGE_RE = re.compile(
     r"(⟦BJ[A-Z]?\d+⟧)(\s*(?:[-–~]|to)\s*)([^⟦]{1,60}?)(⟦BJ[A-Z]?\d+⟧)",
     re.IGNORECASE)
@@ -1063,22 +1125,53 @@ def _bj_hour(h, ap):
     return v % 12 + (12 if (ap or "").upper() == "PM" else 0)
 
 
-def _bj_datetime_text(m):
-    """日期+时间+时区 -> 北京时间文本(如 "10月7日 02:00"; 跨年时带年份)。"""
-    mon = _BJ_MONTH.get(m.group("mon").lower())
-    off = _BJ_TZ_OFFSET.get(m.group("tz").upper())
-    hh = _bj_hour(m.group("h"), m.group("ap"))
+def _bj_date_clock_text(mon, day, year, hh, mi, off):
+    """月/日/(年) + 24 小时制时刻 + 原时区偏移 -> 北京时间文本(如 "11月4日 07:59")。
+
+    year 为 None(原文没写年份)时按平年试算, 只输出月日 —— 绝不输出推算出来的年份。"""
     if mon is None or off is None or hh is None:
         return None
     try:
-        dt = datetime(int(m.group("year")), mon, int(m.group("day")), hh,
-                      int(m.group("mi")))
+        dt = datetime(year if year else 2000, mon, day, hh, mi)
     except ValueError:
         return None
     bj = dt - timedelta(hours=off) + timedelta(hours=8)
-    if bj.year != dt.year:
+    if year is not None and bj.year != dt.year:
         return "%d年%d月%d日 %02d:%02d" % (bj.year, bj.month, bj.day, bj.hour, bj.minute)
     return "%d月%d日 %02d:%02d" % (bj.month, bj.day, bj.hour, bj.minute)
+
+
+def _bj_datetime_text(m):
+    """日期+时间+时区 -> 北京时间文本(如 "10月7日 02:00"; 跨年时带年份)。"""
+    return _bj_date_clock_text(
+        _bj_month(m.group("mon")), int(m.group("day")), int(m.group("year")),
+        _bj_hour(m.group("h"), m.group("ap")), int(m.group("mi")),
+        _BJ_TZ_OFFSET.get(m.group("tz").upper()))
+
+
+def _bj_clock_with_date(text, m, fallback):
+    """只有时刻+时区的括号补上换算后的月日(2026-10-05 需求: 日期跨天时必须看到是哪天)。
+
+    例: "from Oct. 23 until Nov. 3 at 11:59 PM UTC" -> "11月4日 07:59"
+        "November 3, 11:59 PM UTC"                   -> "11月4日 07:59"
+        "Ends 11:59 PM UTC on November 3"           -> "11月4日 07:59"
+    找不到紧邻日期时保持原样(宁缺勿错)。"""
+    head, tail = text[:m.start()], text[m.end():]
+    dm = None
+    for cand in _BJ_DATE_ONLY_RE.finditer(head):
+        if _BJ_GAP_BEFORE_RE.fullmatch(head[cand.end():]):
+            dm = cand                      # 取最后一个(即最近)能接上的日期
+    if dm is None:
+        gap = _BJ_GAP_AFTER_RE.match(tail)
+        if gap:
+            dm = _BJ_DATE_ONLY_RE.match(tail, gap.end())
+    if dm is None:
+        return fallback
+    mon, day, year = _bj_date_parts(dm)
+    zh = _bj_date_clock_text(
+        mon, day, year, _bj_hour(m.group("h"), m.group("ap")),
+        int(m.group("mi")), _BJ_TZ_OFFSET.get(m.group("tz").upper()))
+    return zh or fallback
 
 
 def _bj_clock_text(m):
@@ -1093,7 +1186,7 @@ def _bj_clock_text(m):
 
 def _bj_tzgroup_text(m):
     """日期+(时区)+时段 -> 北京时间文本(日期只写一次; 跨日则每个时间各带日期)。"""
-    mon = _BJ_MONTH.get(m.group("mon").lower())
+    mon = _bj_month(m.group("mon"))
     off = _BJ_TZ_OFFSET.get(m.group("tz").upper())
     if mon is None or off is None:
         return None
@@ -1138,6 +1231,9 @@ def _inject_beijing(text: str):
             if any(m.start() < e and s < m.end() for s, e, _z in hits):
                 continue                      # 这段只是上面日期时间的一部分
             zh = conv(m)
+            if zh and rex is _BJ_CLOCK_RE:
+                # 只有时刻的括号: 同一句紧邻处写了日期就补上换算后的月日
+                zh = _bj_clock_with_date(text, m, zh)
             if zh:
                 hits.append((m.start(), m.end(), zh))
     if not hits:
@@ -1503,6 +1599,10 @@ def build_message_parts(article: dict, blocks) -> list:
     if img_dropped:
         # 图片不展示时, 至少告诉读者原文里有图(纯图公告的信息量全在图里)
         parts.append(f"（本文另有 {img_dropped} 张配图，见上方原文链接）")
+
+    # 译文侧中文修正(橙色蘑菇 -> 花蘑菇 等): 拼装完成后统一过一遍,
+    # 标题/正文/列表以及缓存命中的旧译文都能覆盖到。
+    parts = [apply_zh_fix(p) for p in parts]
 
     # 过滤空段
     return [p for p in parts if p and p.strip()]
@@ -1961,6 +2061,14 @@ def self_test() -> bool:
           and apply_terms("Movement and jump are set to default")
           == "Movement and 跳跃力 are set to default")
 
+    # Orange Mushroom 译名: 国服官方译名是「花蘑菇」(2026-10-05 需求),
+    # 术语表与译文侧修正双重保证; 相邻的蘑菇类怪物名不受影响。
+    check("术语表: Orange Mushroom -> 花蘑菇(其它蘑菇名不受影响)",
+          apply_terms("Choose the Orange Mushroom Package") == "Choose the 花蘑菇 Package"
+          and apply_terms("orange mushroom tier") == "花蘑菇 tier"
+          and apply_terms("Green Mushroom / Zombie Mushroom / Horny Mushroom")
+          == "绿蘑菇 / 僵尸蘑菇 / 刺蘑菇")
+
     # 专有名词/系统名钉死(2026-10-05 核查线上 129 条译文缓存后新增)
     check("专有名词钉死: Maple Island / Victoria Island(不再被 Maple 术语抢先替换)",
           apply_terms("Starts on **Maple Island** before traveling to Victoria Island.")
@@ -1997,6 +2105,38 @@ def self_test() -> bool:
           and beijing_annotate("Meet at 6:00 PM") == "Meet at 6:00 PM"
           and beijing_annotate("October 7, 14 | Time: 1:00 AM UTC - 2:00 AM UTC")
           == "October 7, 14 | Time: 1:00 AM UTC - 2:00 AM UTC（北京时间 09:00 - 10:00）")
+    check("北京时间: 只有时刻时按紧邻日期补月日",
+          beijing_annotate("Sale runs October 23 - November 3, 11:59 PM UTC")
+          == "Sale runs October 23 - November 3, 11:59 PM UTC"
+             "（北京时间 11月4日 07:59）"
+          and beijing_annotate("Entries close November 3 at 11:59 PM UTC")
+          == "Entries close November 3 at 11:59 PM UTC（北京时间 11月4日 07:59）"
+          and beijing_annotate("November 3, 2026, 11:59 PM UTC")
+          == "November 3, 2026, 11:59 PM UTC（北京时间 11月4日 07:59）"
+          and beijing_annotate("Ends 11:59 PM UTC on November 3")
+          == "Ends 11:59 PM UTC（北京时间 11月4日 07:59） on November 3"
+          and beijing_annotate("October 14 is the deadline. Items expire 11:59 PM UTC")
+          == "October 14 is the deadline. Items expire 11:59 PM UTC（北京时间 07:59）")
+    check("北京时间: 区间两端都能带月日",
+          beijing_annotate("October 23, 2026 12:00 AM UTC - November 3, 2026, 11:59 PM UTC")
+          == "October 23, 2026 12:00 AM UTC - November 3, 2026, 11:59 PM UTC"
+             "（北京时间 10月23日 08:00 - 11月4日 07:59）")
+    check("北京时间: 月份缩写/数字日期也认",
+          beijing_annotate("from Oct. 23 until Nov. 3 at 11:59 PM UTC")
+          == "from Oct. 23 until Nov. 3 at 11:59 PM UTC（北京时间 11月4日 07:59）"
+          and beijing_annotate("[Updated 8/11 at 4:43 PM PDT]")
+          == "[Updated 8/11 at 4:43 PM PDT（北京时间 8月12日 07:43）]"
+          and beijing_annotate("**Oct. 6, 2026 6:00 PM UTC**")
+          == "**Oct. 6, 2026 6:00 PM UTC（北京时间 10月7日 02:00）**"
+          and beijing_annotate("**August 11, 2026** at 4:00 PM PDT")
+          == "**August 11, 2026** at 4:00 PM PDT（北京时间 8月12日 07:00）")
+    check("北京时间: 「日期 | Time: 时段」写法/多日期时宁缺勿错",
+          beijing_annotate("October 12, 2026 | Time: 12:00 AM UTC - 2:00 AM UTC")
+          == "October 12, 2026 | Time: 12:00 AM UTC - 2:00 AM UTC"
+             "（北京时间 10月12日 08:00 - 10:00）"
+          and beijing_annotate("October 11, 16, 20 | Time: 1:00 AM UTC - 2:00 AM UTC")
+          == "October 11, 16, 20 | Time: 1:00 AM UTC - 2:00 AM UTC"
+             "（北京时间 09:00 - 10:00）")
     check("北京时间: 占位符被写成变体也能回填",
           _unmask_beijing("时间 October 6, 2026 6:00 PM UTC【 BJ 1 】。",
                           {"⟦BJ1⟧": "（北京时间 10月7日 02:00）"})
@@ -2211,6 +2351,17 @@ def self_test() -> bool:
     check("配图 html 模式",
           any(p.startswith('<img src="') for p in build_message_parts(art, body_blocks)))
     globals()["IMG_STYLE"] = _saved_img_style
+
+    # 译文侧中文修正: 引擎译成"橙色蘑菇"时钉回国服译名"花蘑菇"(缓存命中的旧译文同样生效)
+    check("译文侧译名修正 橙色蘑菇/Orange Mushroom -> 花蘑菇",
+          apply_zh_fix("橙色蘑菇出现了") == "花蘑菇出现了"
+          and apply_zh_fix("橘色蘑菇、橙蘑菇") == "花蘑菇、花蘑菇"
+          and apply_zh_fix("Orange Mushroom / orange mushrooms") == "花蘑菇 / 花蘑菇"
+          and apply_zh_fix("花蘑菇") == "花蘑菇" and apply_zh_fix("plain") == "plain"
+          and apply_zh_fix("蘑菇王/蘑菇仔/僵尸蘑菇/绿蘑菇") == "蘑菇王/蘑菇仔/僵尸蘑菇/绿蘑菇")
+    check("拼装阶段应用译名修正",
+          any(p == "花蘑菇出现了" for p in build_message_parts(
+              art, [("para", "橙色蘑菇出现了")])))
 
     mk = add_continuation_marks(["正文一", "正文二", "正文三"])
     check("多条: 首条末尾提示未完", mk[0].endswith("（1/3・未完，接续见下）"))
