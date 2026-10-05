@@ -780,6 +780,95 @@ def _should_keep_original(line: str) -> bool:
     return False
 
 
+# 短时间行(见 _should_keep_original)不送翻译引擎, 免得时刻/时区被翻错;
+# 这里用确定性规则把月份/日期与 12 小时制时刻改写成中文(方案 A), 数字与时区代号原样保留:
+#   October 9, 19 | Time: 12:00 AM UTC - 2:00 AM UTC  ->  10月9日、19日 | 时间：UTC 00:00 - 02:00
+#   October 6, 2026 6:00 PM UTC                        ->  2026年10月6日 UTC 18:00
+# 若改写后仍残留英文单词(说明这行夹着英文句子), 整行放弃改写、保持原样(宁缺勿错)。
+_ZH_MONTH_NUM = {
+    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6, "july": 7,
+    "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6, "jul": 7, "aug": 8, "sep": 9,
+    "sept": 9, "oct": 10, "nov": 11, "dec": 12,
+}
+_ZH_TZ_CODES = ("PDT|PST|CDT|CST|MDT|MST|EDT|EST|AKDT|AKST|HST|CEST|CET|AEST|AEDT|"
+                "JST|KST|IST|UTC|GMT|BST")
+_ZH_MONTH_RE = re.compile(
+    r"\b(?P<mon>january|february|march|april|may|june|july|august|september|october|"
+    r"november|december|jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec)\.?\s+"
+    r"(?P<days>\d{1,2}(?:\s*,\s*\d{1,2})*)(?:\s*,\s*(?P<year>\d{4}))?\b",
+    re.IGNORECASE,
+)
+_ZH_CLOCK_RE = re.compile(
+    r"\b(?P<hh>\d{1,2})(?::(?P<mi>\d{2}))?(?::(?P<ss>\d{2}))?\s*"
+    r"(?P<ap>AM|PM|A\.M\.|P\.M\.)"
+    r"(?:\s*(?P<tz>\(?(?:" + _ZH_TZ_CODES + r")\)?))?",
+    re.IGNORECASE,
+)
+_ZH_CLOCK_TZ_RE = re.compile(
+    r"(?<![\w(])(?P<hms>\d{1,2}:\d{2}(?::\d{2})?)\s+(?P<tz>" + _ZH_TZ_CODES + r")\b(?!\))",
+    re.IGNORECASE,
+)
+_ZH_TZ_DUP_RE = re.compile(
+    r"\b(" + _ZH_TZ_CODES + r")\s+(\d{2}:\d{2}(?::\d{2})?)\s*-\s*\1\s+(\d{2}:\d{2}(?::\d{2})?)",
+    re.IGNORECASE,
+)
+_ZH_TIME_LABEL_RE = re.compile(r"\btime\s*[:：]\s*", re.IGNORECASE)
+
+
+def _zh_month_text(m) -> str:
+    """October 9, 19 / October 6, 2026 -> 10月9日、19日 / 2026年10月6日"""
+    mon = _ZH_MONTH_NUM.get(m.group("mon").lower().rstrip("."))
+    if not mon:
+        return m.group(0)
+    days = "、".join("%d日" % int(d) for d in m.group("days").split(","))
+    year = m.group("year")
+    return "%s年%d月%s" % (year, mon, days) if year else "%d月%s" % (mon, days)
+
+
+def _zh_clock_text(m) -> str:
+    """6:00 PM UTC -> UTC 18:00; 4:00 PM (PDT) -> 16:00 (PDT)"""
+    hh, mi, ss = int(m.group("hh")), m.group("mi") or "00", m.group("ss")
+    ap = m.group("ap").replace(".", "").upper()
+    h24 = (0 if hh == 12 else hh) if ap == "AM" else (12 if hh == 12 else hh + 12)
+    clock = "%02d:%s" % (h24, mi) + (":%s" % ss if ss else "")
+    tz = (m.group("tz") or "").strip()
+    if not tz:
+        return clock
+    if tz.startswith("("):
+        return "%s %s" % (clock, tz.upper())
+    return "%s %s" % (tz.upper(), clock)
+
+
+def _zh_time_line(line: str) -> str:
+    """短时间行 -> 中文(方案 A)。含中文、网址行、或改写后残留英文单词(该行夹着句子)时原样返回。"""
+    if not line or not line.strip() or re.search(r"[\u4e00-\u9fff]", line):
+        return line
+    if re.match(r"^\s*(?:https?://|www\.)", line):
+        return line
+    if not (_ZH_MONTH_RE.search(line) or _ZH_CLOCK_RE.search(line)
+            or _ZH_TIME_LABEL_RE.search(line)):
+        return line
+    out = _ZH_TIME_LABEL_RE.sub("时间：", line)
+    out = _ZH_MONTH_RE.sub(_zh_month_text, out)
+    out = _ZH_CLOCK_RE.sub(_zh_clock_text, out)
+    out = _ZH_CLOCK_TZ_RE.sub(
+        lambda m: "%s %s" % (m.group("tz").upper(), m.group("hms")), out)
+    for _ in range(3):
+        new = _ZH_TZ_DUP_RE.sub(
+            lambda m: "%s %s - %s" % (m.group(1).upper(), m.group(2), m.group(3)), out)
+        if new == out:
+            break
+        out = new
+    out = re.sub(r"\s+(?:at|on|@)\s+(?=(?:%s)\b)" % _ZH_TZ_CODES, " ", out, flags=re.IGNORECASE)
+    out = re.sub(r"[,，]\s*(?=(?:%s)\s+\d)" % _ZH_TZ_CODES, " ", out, flags=re.IGNORECASE)
+    residue = re.sub(r"⟦[^⟧]*⟧", " ", out)      # 北京时间占位符不算英文残留
+    residue = re.sub(r"\b(?:%s)\b" % _ZH_TZ_CODES, " ", residue, flags=re.IGNORECASE)
+    residue = re.sub(r"\b(?:time|am|pm)\b", " ", residue, flags=re.IGNORECASE)
+    residue = re.sub(r"[^A-Za-z]+", "", residue)
+    return line if residue else out
+
+
 def _translate_deepseek_batch(texts, tl="zh-CN"):
     """用 DeepSeek 一次批量翻译多条文本（国内直连, 快）。
     止损策略: 最多降批 1 次(20 -> 10)。"返回条数不符"说明是输出格式问题,
@@ -1339,6 +1428,8 @@ def translate_blocks(blocks, state=None, title_texts=None):
         return text + "".join(bj_maps.get(key, {}))
 
     for (b, k, li, raw, inj, rep) in units:
+        # 时间行的确定性中文改写(方案 A); 夹着英文句子的行会原样返回
+        zh_time = _zh_time_line(inj)
         if k == "title":
             tr_map[(b, k, li)] = rep
             if re.search(r"[A-Za-z]", rep):
@@ -1358,7 +1449,14 @@ def translate_blocks(blocks, state=None, title_texts=None):
             # 开场问候行(如 Hi Maplers,): 固定译法, 防止引擎把 Maplers 音译成"梅普勒斯"
             tr_map[(b, k, li)] = _keep_bj((b, k, li), GREETING_FIX[raw.strip()])
         elif _should_keep_original(raw):
-            tr_map[(b, k, li)] = inj
+            # 保留原文分支(时间行/网址/已含中文): 时间行不送翻译引擎,
+            # 但仍用确定性规则把英文日期/时刻改写成中文(方案 A), 网址与中文行不受影响。
+            tr_map[(b, k, li)] = zh_time
+        elif zh_time != inj:
+            # 「日期 + 时刻」这类纯时间行(不被 _should_keep_original 拦下)也走同一套
+            # 确定性改写, 免得时刻/时区被引擎翻歪; 夹英文句子的行不会被改写, 照旧送引擎。
+            print(f"[info] 时间行确定性中文改写: {raw[:40]}", flush=True)
+            tr_map[(b, k, li)] = zh_time
         else:
             # 行首问候语与正文同段时(2026-10-03 起官网的写法), 整行精确匹配失效:
             # 先把问候前缀固定成中文, 其余英文照常送翻译引擎
@@ -2090,6 +2188,8 @@ def self_test() -> bool:
           beijing_annotate("October 6, 2026 6:00 PM UTC - October 20, 2026 11:59 PM UTC")
           == "October 6, 2026 6:00 PM UTC - October 20, 2026 11:59 PM UTC"
              "（北京时间 10月7日 02:00 - 10月21日 07:59）")
+    # 注: beijing_annotate 只负责「（北京时间 …）」括号; 时间行的英文日期/时刻改写成中文
+    #     发生在 translate_blocks 阶段(见 _zh_time_line), 所以这里的期望值仍是英文原文。
     check("北京时间: 纯时间区间 / PDT / 跨年带年份",
           beijing_annotate("Time: 12:00 AM UTC - 2:00 AM UTC")
           == "Time: 12:00 AM UTC - 2:00 AM UTC（北京时间 08:00 - 10:00）"
@@ -2144,8 +2244,35 @@ def self_test() -> bool:
     _b2, _ = translate_blocks([("para", "October 6, 2026 6:00 PM UTC")],
                               state={"tr_cache": {},
                                      "tr_cache_ver": _terms_fingerprint()})
-    check("北京时间: 端到端(时间行保留英文 + 补北京时间)",
-          _b2[0][1] == "October 6, 2026 6:00 PM UTC（北京时间 10月7日 02:00）")
+    check("北京时间: 端到端(时间行确定性中文改写 + 补北京时间)",
+          _b2[0][1] == "2026年10月6日 UTC 18:00（北京时间 10月7日 02:00）")
+    check("中文时间行: 多日期 + Time 时段(方案 A)",
+          _zh_time_line("October 9, 19 | Time: 12:00 AM UTC - 2:00 AM UTC**")
+          == "10月9日、19日 | 时间：UTC 00:00 - 02:00**"
+          and _zh_time_line("October 11, 16, 20 | Time: 1:00 AM UTC - 2:00 AM UTC**")
+          == "10月11日、16日、20日 | 时间：UTC 01:00 - 02:00**")
+    check("中文时间行: 单日期带年份 / 12 小时制转 24 小时 / 缩写月份",
+          _zh_time_line("October 6, 2026 6:00 PM UTC") == "2026年10月6日 UTC 18:00"
+          and _zh_time_line("**Oct. 6, 2026 6:00 PM UTC**") == "**2026年10月6日 UTC 18:00**"
+          and _zh_time_line("October 12, 2026 | Time: 12:00 AM UTC - 2:00 AM UTC**")
+          == "2026年10月12日 | 时间：UTC 00:00 - 02:00**"
+          and _zh_time_line("December 31, 2026 11:00 PM UTC")
+          == "2026年12月31日 UTC 23:00"
+          and _zh_time_line("October 1, 2026 12:00 PM UTC") == "2026年10月1日 UTC 12:00"
+          and _zh_time_line("November 30, 2026 at 11:59 PM UTC")
+          == "2026年11月30日 UTC 23:59")
+    check("中文时间行: 括号时区留在原位 / 夹句子的行不动 / 网址与中文不动",
+          _zh_time_line("4:00 PM (PDT)") == "16:00 (PDT)"
+          and _zh_time_line("Ends 11:59 PM UTC on November 3")
+          == "Ends 11:59 PM UTC on November 3"
+          and _zh_time_line("https://g.nexonstatic.com/media/x/maple-island.png")
+          == "https://g.nexonstatic.com/media/x/maple-island.png"
+          and _zh_time_line("维护将在明天开始") == "维护将在明天开始")
+    check("中文时间行: 长时段行也确定性改写, 夹句子的行仍交引擎",
+          _zh_time_line("October 6, 2026 6:00 PM UTC - October 20, 2026 11:59 PM UTC")
+          == "2026年10月6日 UTC 18:00 - 2026年10月20日 UTC 23:59"
+          and _zh_time_line("Sale runs October 23 - November 3, 11:59 PM UTC")
+          == "Sale runs October 23 - November 3, 11:59 PM UTC")
 
     # 2) HTML 解析 + 小标题识别
     html = ("<h2><strong>Times:</strong></h2>"
