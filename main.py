@@ -2259,6 +2259,12 @@ def self_test() -> bool:
           and _merge_split_term_lines("Mano\n\nMushmom") == "Mano\n\nMushmom"
           and apply_terms(_merge_split_term_lines("Zombie\nMushmom")) == "僵尸蘑菇王")
 
+    # 奖励物品 Snowy<br>Snow: 加了术语后应合并成一行并直接命中国服译名(不再被引擎直译成"雪天"/"下雪")。
+    check("奖励物品 Snowy<br>Snow 合并后是国服译名 下雪了",
+          _merge_split_term_lines("Snowy\nSnow") == "Snowy Snow"
+          and apply_terms("Snowy Snow") == "下雪了"
+          and apply_terms(_merge_split_term_lines("Snowy\nSnow")) == "下雪了")
+
     # 专有名词/系统名钉死(2026-10-05 核查线上 129 条译文缓存后新增)
     check("专有名词钉死: Maple Island / Victoria Island(不再被 Maple 术语抢先替换)",
           apply_terms("Starts on **Maple Island** before traveling to Victoria Island.")
