@@ -171,8 +171,21 @@ if NPC_NAMES:
 
 # 预编译术语正则(启动时一次): 长词优先, 词边界匹配。
 # 避免 apply_terms 每次调用都现编译上千条正则(每轮运行可省约 1 秒)
+#
+# 踩坑(45621 实测 2026-10-05): 奖励表里原文是 "Zombie<br>Mushmom", <br> 被解析成换行,
+# 于是成了 "Zombie\nMushmom"。术语表里 "Zombie Mushmom" 词间是普通空格, 匹配不过换行,
+# 长词失配后只剩短词 "Mushmom" 命中 -> 蘑菇王, 前面的 Zombie 又被引擎单独译成"僵尸",
+# 怪物名在消息里被劈成「僵尸 / 蘑菇王」两段。所以术语内部的空白要容忍**单个换行**
+# (以及制表/不间断空格), 但不跨空行 —— 空行是段落/表格单元格的边界, 跨过去会把两个
+# 本来不相干的词并成一个名字。
+def _term_pattern(en: str):
+    words = [re.escape(w) for w in en.split()] or [re.escape(en)]
+    gap = r"[ \t\u00a0]*(?:\r?\n[ \t\u00a0]*)?"     # 词间空白: 空格/制表/nbsp, 外加至多一个换行
+    return re.compile(r"(?<![\w])" + gap.join(words) + r"(?![\w])")
+
+
 _TERM_PATTERNS = [
-    (re.compile(r"(?<![\w])" + re.escape(en) + r"(?![\w])"), zh)
+    (_term_pattern(en), zh)
     for en, zh in sorted(TERMS.items(), key=lambda kv: len(kv[0]), reverse=True)
 ]
 
@@ -281,6 +294,44 @@ def apply_terms(text: str) -> str:
         last = end
     out.append(_sub_terms(text[last:]))
     return "".join(out)
+
+
+# 术语/NPC 名的 casefold 集合: 用来判断相邻两行是不是被 <br> 拆开的一个名字
+_TERM_KEYS_CF = {k.casefold() for k in TERMS}
+_NPC_KEYS_CF = {str(n).casefold() for n in NPC_NAMES}
+
+
+def _merge_split_term_lines(text: str) -> str:
+    """把被 <br> 拆成两行的术语/NPC 名重新拼回一行(仅当拼接处正好命中词条)。
+
+    踩坑(45621 实测 2026-10-05): 奖励表原文是 "Zombie<br>Mushmom", <br> 被解析成换行,
+    段落又是按行拆翻译单元的, 于是 "Zombie" 和 "Mushmom" 各自成行 —— 前者被引擎单独
+    译成"僵尸", 后者命中术语表变"蘑菇王", 同一个怪物名在消息里被劈成两行。
+    只判断相邻两行的"末尾 1~2 个词 + 开头 1~2 个词", 拼起来正好是术语表/NPC 保护表里的
+    词条才合并; 不做泛化合并, 免得把段落或表格单元格并到一起。"""
+    if "\n" not in text:
+        return text
+    out = []
+    for line in text.split("\n"):
+        merged = False
+        if out and line.strip() and out[-1].strip():
+            pw, hw = out[-1].split(), line.split()
+            for i in (1, 2):
+                if i > len(pw):
+                    break
+                for j in (1, 2):
+                    if j > len(hw):
+                        break
+                    joined = " ".join(pw[-i:] + hw[:j]).casefold()
+                    if joined in _TERM_KEYS_CF or joined in _NPC_KEYS_CF:
+                        out[-1] = out[-1].rstrip() + " " + line.strip()
+                        merged = True
+                        break
+                if merged:
+                    break
+        if not merged:
+            out.append(line)
+    return "\n".join(out)
 
 
 # 占位符回填用的宽松匹配: 容忍模型写成 "⟦ NPC 1 ⟧"/"【NPC1】"/全角数字等变体
@@ -1382,6 +1433,10 @@ def translate_blocks(blocks, state=None, title_texts=None):
     避免术语混入中文后整行被误判为"已翻译"而跳过（导致半中半英）。"""
     # 收集翻译单元: (block_index, 位置描述, 原始文本, 注入占位符后的文本, 术语替换后文本)
     # 时间行的「（北京时间 …）」先写成 ⟦BJ1⟧, 翻译完再回填(见 _inject_beijing)
+    # 段落原文先合并被 <br> 拆开的名字(见 _merge_split_term_lines): 下面取翻译单元与
+    # 最后重建块都用这份文本, 两边行数才能对上。
+    blocks = [("para", _merge_split_term_lines(b[1])) if b[0] == "para" else b
+              for b in blocks]
     units = []
     bj_maps = {}
 
@@ -2182,6 +2237,27 @@ def self_test() -> bool:
           and apply_terms("orange mushroom tier") == "花蘑菇 tier"
           and apply_terms("Green Mushroom / Zombie Mushroom / Horny Mushroom")
           == "绿蘑菇 / 僵尸蘑菇 / 刺蘑菇")
+
+    # 2026-10-05 实测(45621 奖励表): 原文 "Zombie<br>Mushmom" 解析成 "Zombie\nMushmom",
+    # 长词 "Zombie Mushmom" 匹配不过换行, 只剩短词 Mushmom 命中 -> 怪物名在消息里被
+    # 劈成「僵尸 / 蘑菇王」两段。术语内部的单个换行必须能匹配, 空行(不同段落/单元格)不能。
+    check("术语跨 <br> 换行仍整名替换(Zombie Mushmom 不被劈成两段)",
+          apply_terms("Zombie\nMushmom") == "僵尸蘑菇王"
+          and apply_terms("Zombie\r\nMushmom") == "僵尸蘑菇王"
+          and apply_terms("Zombie\u00a0Mushmom") == "僵尸蘑菇王"
+          and apply_terms("Zombie Mushmom") == "僵尸蘑菇王"
+          and apply_terms("Zombie\n\nMushmom") == "Zombie\n\n蘑菇王"     # 空行不跨
+          and apply_terms("King Slime\n\nRewards") == "超级绿水灵\n\nRewards")
+
+    # 段落又是按行拆翻译单元的, 所以还得在拆行之前把被 <br> 拆开的名字拼回一行
+    # (只靠 apply_terms 看不到跨行的名字, 消息里依然是"僵尸"、"蘑菇王"两行)。
+    check("被 <br> 拆开的名字在拆行前拼回一行(Zombie<br>Mushmom)",
+          _merge_split_term_lines("Zombie\nMushmom") == "Zombie Mushmom"
+          and _merge_split_term_lines("Rewards\nZombie\nMushmom\nRewards")
+          == "Rewards\nZombie Mushmom\nRewards"
+          and _merge_split_term_lines("King Slime\n\nRewards") == "King Slime\n\nRewards"
+          and _merge_split_term_lines("Mano\n\nMushmom") == "Mano\n\nMushmom"
+          and apply_terms(_merge_split_term_lines("Zombie\nMushmom")) == "僵尸蘑菇王")
 
     # 专有名词/系统名钉死(2026-10-05 核查线上 129 条译文缓存后新增)
     check("专有名词钉死: Maple Island / Victoria Island(不再被 Maple 术语抢先替换)",
