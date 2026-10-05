@@ -1184,17 +1184,10 @@ def img_line(url: str, label: str) -> str:
     return f"🖼 [{label}]({url})"
 
 
-# 原文里偶发混进 Nexon 自己的内部标记(实测 45621: "…face King Slime! J>PQ@@"),
-# 形如 J>PQ@@ 的 token 不是给人看的正文, 一律在渲染阶段清掉。
-# 注意: 只在渲染阶段清(不影响送翻译的文本), 不会因此触发重译。
-_JUNK_MARK_RE = re.compile(r"\s*[A-Z]{1,3}>[A-Z]{1,4}@@\s*")
-
-
 def clean_markdown(text: str) -> str:
-    """清理翻译后残留的 markdown 噪音: 空粗体、相邻粗体标记、原文内部乱码标记。"""
+    """清理翻译后残留的 markdown 噪音: 空粗体、相邻粗体标记。"""
     text = re.sub(r"\*\*[ \t\u00a0]+\*\*", "**", text)   # ** ** -> **
     text = re.sub(r"\*{4,}", "**", text)                 # **** -> **
-    text = _JUNK_MARK_RE.sub(" ", text).strip()          # J>PQ@@ -> 去掉
     return text
 
 
@@ -1848,9 +1841,8 @@ def self_test() -> bool:
     check("奇数粗体清理(只去掉末尾不成对的那个)", fix_bold_balance("**a**b**") == "**a**b")
     check("偶数粗体保留", fix_bold_balance("**a**") == "**a**")
     check("clean_markdown 空粗体", clean_markdown("** **") == "**")
-    check("原文内部乱码标记被清掉(J>PQ@@)",
-          clean_markdown("face King Slime! J>PQ@@") == "face King Slime!"
-          and clean_markdown("J>PQ@@") == "")
+    # 注: 原文里的 J>PQ@@ 是玩家招募用语(游戏术语), 不做任何清洗, 原样保留
+    check("J>PQ@@ 等招募用语原样保留", clean_markdown("face King Slime! J>PQ@@") == "face King Slime! J>PQ@@")
     check("小标题 General Key Details 固定译法",
           HEADING_OVERRIDES.get("General Key Details") == "关键信息总览")
 
