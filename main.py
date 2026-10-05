@@ -69,9 +69,18 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
 DRY_RUN = os.environ.get("DRY_RUN", "0") == "1"
 STATE_FILE = os.environ.get("STATE_FILE", "state.json")
-MAX_MSG_LEN = int(os.environ.get("MAX_MSG_LEN", "1500"))
-# 单条消息字节上限(UTF-8), 0 = 不启用。若黑盒接口按字节限长, 中文消息容易超(1500 字符≈4500 字节)
+# 单条消息字符上限: 黑盒语音实测(2026-10-05 探测) 8629 字符可发、11529 字符被拒
+# ("当前字数已达上限"), 真实阈值约 10000; 这里取 6000, 给续标和失败劈半重发留余量。
+MAX_MSG_LEN = int(os.environ.get("MAX_MSG_LEN", "6000"))
+# 单条消息字节上限(UTF-8), 0 = 不启用。若黑盒接口按字节限长, 中文消息容易超
 MAX_MSG_BYTES = int(os.environ.get("MAX_MSG_BYTES", "0"))
+# 配图策略: off = 不展示配图(只在末尾提示原文有图) | link = 🖼 [配图 1](URL) | html = <img src="URL">
+# 背景: 黑盒语音服务端会校验图片地址, markdown ![](URL) 被拒("图片链接地址不合法"),
+#       而 [文字](URL) 链接实测可用; <img> 能过服务端校验, 客户端是否渲染尚未确认。
+IMG_STYLE = os.environ.get("IMG_STYLE", "off").strip().lower()
+MAX_IMAGES = int(os.environ.get("MAX_IMAGES", "6"))          # 单条公告最多展示几张配图
+IMG_BASE = os.environ.get("IMG_BASE", "https://g.nexonstatic.com")   # 图片相对路径的域名前缀
+SMALL_IMG_PX = int(os.environ.get("SMALL_IMG_PX", "150"))   # 边长小于它的图算行内小图标(药水/金币之类)
 PUSH_ON_CONTENT_UPDATE = os.environ.get("PUSH_ON_CONTENT_UPDATE", "1") == "1"
 NEWS_API_BASE = os.environ.get(
     "NEWS_API_BASE", "https://g.nexonstatic.com/maplestory/cms/v1"
@@ -271,7 +280,7 @@ UA = (
     "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 )
 
-DIVIDER = "──────────────────"  # 黑盒语音消息里的分隔线
+DIVIDER = "────────────"  # 黑盒语音消息里的分隔线(12 个字符, 原 18 个太长且抢眼)
 
 
 # ---------------------------------------------------------------------------
@@ -421,7 +430,7 @@ def select_pending(news: list, state: dict, now=None) -> list:
 # 2. 解析正文 HTML -> 结构块
 #    ('heading', 文本) 小标题   ('para', 文本) 段落
 #    ('list', [项...]) 列表     ('divider',)  分隔线
-#    图片被剔除; <a href> 链接转 Markdown [锚文本](URL)(黑盒语音实测支持渲染,
+#    图片收进配图块(是否展示由 IMG_STYLE 决定); <a href> 链接转 Markdown [锚文本](URL)(实测支持渲染,
 #    点击名称跳转、正文不裸露完整网址, 2026-09-04 起; 空锚文本退回明文 URL);
 #    <strong> 转 **粗体**; <br> 转 \n
 # ---------------------------------------------------------------------------
@@ -477,6 +486,28 @@ class _BodyParser(HTMLParser):
             self._cur = []
         self._cur.append(s)
 
+    def _add_img(self, attrs):
+        """<img> 收进配图块; 装饰图和行内小图标在收集阶段就丢掉(不输出地址)。"""
+        src = ""
+        w = h = 0
+        for k, v in attrs:
+            k = (k or "").lower()
+            if k == "src" and v:
+                src = v
+            elif k in ("width", "height") and (v or "").strip().isdigit():
+                if k == "width":
+                    w = int(v)
+                else:
+                    h = int(v)
+        url = normalize_img_url(src)
+        if url and (is_small_img(w, h, url) or is_decorative_img(url)):
+            url = ""
+        if url:
+            self._flush_para()          # 图前后断开, 免得图和正文挤成一段
+            self.blocks.append(("img", url))
+        if self._link_txts:
+            self._link_imgs[-1] = True
+
     # ---- 事件 ----
     def handle_starttag(self, tag, attrs):
         if tag in ("script", "style"):          # 有闭合标签, 需要跳过内容
@@ -525,10 +556,9 @@ class _BodyParser(HTMLParser):
             self._li = []
             self._in_li = True
         elif tag == "img":
-            # 图片一律剔除(不输出图片链接); 若位于 <a> 内则标记该链接"含图",
-            # </a> 收尾时据此丢弃整图链接外壳, 避免残留孤零零的 (URL) 行
-            if self._link_txts:
-                self._link_imgs[-1] = True
+            # 图片收进配图块; 若位于 <a> 内仍标记该链接"含图", </a> 收尾时丢弃
+            # 整图链接外壳, 避免残留孤零零的 (URL) 行
+            self._add_img(attrs)
 
     def handle_endtag(self, tag):
         if tag in ("script", "style"):
@@ -590,9 +620,8 @@ class _BodyParser(HTMLParser):
         elif tag == "hr":
             self._flush_para()
             self.blocks.append(("divider", ""))
-        elif tag == "img":
-            if self._link_txts:
-                self._link_imgs[-1] = True
+        elif tag == "img":            # 自闭合 <img/>
+            self._add_img(attrs)
 
     def handle_data(self, data):
         if self._skip > 0:
@@ -1071,6 +1100,55 @@ def translate_blocks(blocks, state=None, title_texts=None):
 _NOISE_LINE_RE = re.compile(r"^(back\s*to\s*top|top)$", re.IGNORECASE)
 
 
+# ---- 正文配图 ----
+# 装饰图(页头/背景/图标/分割线)按文件名识别, 不作为配图展示
+_DECOR_IMG_RE = re.compile(
+    r"(bg[-_]?wrap|background|[-_](bg|header|footer|icon|logo|spacer|blank|line|dot|arrow)"
+    r"|^fa-header|[-_]divider|transparent)",
+    re.IGNORECASE,
+)
+
+
+def normalize_img_url(src: str) -> str:
+    """官网图片相对路径(/media/xxx.png)补成完整 URL; 非 http(s) 一律丢弃(返回空串)。"""
+    src = (src or "").strip()
+    if not src:
+        return ""
+    if src.startswith("//"):
+        return "https:" + src
+    if src.startswith("/"):
+        return IMG_BASE.rstrip("/") + src
+    if src.startswith(("http://", "https://")):
+        return src
+    return ""
+
+
+def is_decorative_img(url: str) -> bool:
+    """按文件名判断是否装饰图。"""
+    return bool(_DECOR_IMG_RE.search(url.rsplit("/", 1)[-1]))
+
+
+def is_small_img(w: int, h: int, url: str) -> bool:
+    """判断是否行内小图标(如 50x50 的药水/金币); 未标尺寸的不动, 宁可多留。"""
+    if not (w and h):
+        m = re.search(r"[?&]width=(\d+)", url)
+        if m:
+            w = w or int(m.group(1))
+        m = re.search(r"[?&]height=(\d+)", url)
+        if m:
+            h = h or int(m.group(1))
+    return 0 < w < SMALL_IMG_PX and 0 < h < SMALL_IMG_PX
+
+
+def img_line(url: str, label: str) -> str:
+    """把一张配图渲染成消息里的一行; IMG_STYLE=off 时返回空串(不展示)。"""
+    if not url or IMG_STYLE == "off":
+        return ""
+    if IMG_STYLE == "html":
+        return f'<img src="{url}">'
+    return f"🖼 [{label}]({url})"
+
+
 def clean_markdown(text: str) -> str:
     """清理翻译后残留的 markdown 噪音: 空粗体、相邻粗体标记。"""
     text = re.sub(r"\*\*[ \t\u00a0]+\*\*", "**", text)   # ** ** -> **
@@ -1079,13 +1157,21 @@ def clean_markdown(text: str) -> str:
 
 
 def fix_bold_balance(text: str) -> str:
-    """粗体标记数量为奇数时, 直接去掉全部粗体标记, 避免 markdown 渲染错乱。"""
-    return text.replace("**", "") if text.count("**") % 2 == 1 else text
+    """粗体标记数量为奇数时, 只去掉最后一个不成对的 **, 保留其余粗体。
+
+    旧实现是直接删光所有 **: 一个错位标记就毁掉整段粗体(2026-10-05 改)。
+    """
+    if text.count("**") % 2 == 0:
+        return text
+    i = text.rfind("**")
+    return text[:i] + text[i + 2:]
 
 
 # ---------------------------------------------------------------------------
 # 4. 排版：按黑盒语音 Markdown 规则生成消息
-#    黑盒语音规则: 支持 # 与 ## 两级标题; **粗体**; 段落间用 \n\n 换行
+#    实测(2026-10-05 探测): #/## 标题、**粗体**、[文字](URL) 链接可用;
+#    markdown 图片 ![](URL) 被服务端拒("图片链接地址不合法"); 单条上限约 10000 字符。
+#    段落间用 \n\n 换行; 列表项之间用"行尾两空格 + \n"硬换行(单 \n 会被挤成一行)
 # ---------------------------------------------------------------------------
 def build_message_parts(article: dict, blocks) -> list:
     """生成消息分片列表（每个分片是一个独立段落串），再交给 chunk 拆条。"""
@@ -1101,21 +1187,43 @@ def build_message_parts(article: dict, blocks) -> list:
     except Exception:
         pub_bj = article.get("liveDate", "")
 
-    parts.append(f"# {article['title_cn']}")
-    parts.append(f"**作者**：{AUTHOR_NAME}")
     # 时区文案随时区配置动态化: Asia/Shanghai 显示"北京时间", 其他显示时区 key
     tz_label = getattr(DISPLAY_TZ, "key", None) or "UTC+8"
     tz_display = "北京时间" if tz_label == "Asia/Shanghai" else tz_label
-    parts.append(f"**发布时间**：{pub_bj}（{tz_display}）")
-    # 原文链接: 正文图片被剔除, 读者想看图/对照原文可直接点开
+
+    parts.append(f"# {article['title_cn']}")
+    # 头部元信息压成两行: 原来作者/时间/链接各占一行, 头部比正文还长
+    parts.append(f"**作者**：{AUTHOR_NAME}｜**发布时间**：{pub_bj}（{tz_display}）")
+    # 原文链接: 配图不展示时, 这是读者看图的唯一入口
     parts.append(f"**原文链接**：https://maplestory.nexon.net/news/{article.get('id')}")
+    cover = img_line(normalize_img_url(article.get("imageThumbnail") or ""), "查看封面图")
+    if cover:
+        parts.append(cover)
     parts.append(DIVIDER)
 
     # ---- 正文 ----
+    # 官网里"整段粗体"的小节标题不再升成 ##: 不会和消息首行的 # 标题抢层级,
+    # 用整行粗体当小节也更贴合黑盒语音的观感。
+    used_divider = False
+    seen_imgs = set()
+    img_shown = 0
+    img_dropped = 0
     for blk in blocks:
         kind = blk[0]
         if kind == "heading":
-            parts.append(f"## {fix_bold_balance(clean_markdown(blk[1]))}")
+            parts.append(f"**{fix_bold_balance(clean_markdown(blk[1]))}**")
+        elif kind == "img":
+            url = blk[1]
+            if url in seen_imgs:
+                continue
+            seen_imgs.add(url)
+            if IMG_STYLE == "off" or img_shown >= MAX_IMAGES:
+                img_dropped += 1
+                continue
+            img_shown += 1
+            line = img_line(url, f"配图 {img_shown}")
+            if line:
+                parts.append(line)
         elif kind == "para":
             text = fix_bold_balance(clean_markdown(blk[1]))
             stripped_outer = False
@@ -1146,7 +1254,13 @@ def build_message_parts(article: dict, blocks) -> list:
             if lines:
                 parts.append("\n".join(lines))
         elif kind == "divider":
-            parts.append(DIVIDER)
+            if not used_divider:          # 正文中间的重复分隔线只留第一条
+                parts.append(DIVIDER)
+                used_divider = True
+
+    if img_dropped:
+        # 图片不展示时, 至少告诉读者原文里有图(纯图公告的信息量全在图里)
+        parts.append(f"（本文另有 {img_dropped} 张配图，见上方原文链接）")
 
     # 过滤空段
     return [p for p in parts if p and p.strip()]
@@ -1346,6 +1460,50 @@ def remote_pushed_same(sid: str, h: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# 发送增强: 多条续标 + 被拒自动劈半重发
+# ---------------------------------------------------------------------------
+def add_continuation_marks(chunks: list) -> list:
+    """多条消息时标注"第几条/共几条": 首条末尾提示未完, 后续各条开头标注续接。"""
+    n = len(chunks)
+    if n <= 1:
+        return chunks
+    out = []
+    for i, c in enumerate(chunks, 1):
+        if i == 1:
+            out.append(f"{c}\n\n（1/{n}・未完，接续见下）")
+        else:
+            out.append(f"（续 {i}/{n}）\n\n{c}")
+    return out
+
+
+def ack_id(sid: str, content: str) -> str:
+    """黑盒语音幂等号: 公告 id + 内容 hash 前 12 hex(48bit, 保持 < 2^53 的数字字符串)。"""
+    raw = hashlib.sha256(f"{sid}|{content}".encode("utf-8")).hexdigest()[:12]
+    return str(int(raw, 16))
+
+
+def send_chunk_robust(content: str, sid: str, depth: int = 0) -> bool:
+    """发送一条消息; 被接口拒绝时按行对半劈开重发(最多 2 层), 避免整块内容被丢。
+
+    黑盒语音对超长/非法内容返回的是"整条拒绝", 不劈开就等于这段内容静默丢失。
+    """
+    if send_heychat(content, ack_id(sid, content)):
+        return True
+    if depth >= 2 or len(content) < 80:
+        return False
+    subs = [s for s in split_long_part(content, max(1, len(content) // 2 + 1)) if s.strip()]
+    if len(subs) < 2:
+        return False
+    print(f"[warn] 被拒内容自动劈成 {len(subs)} 条重发(第 {depth + 1} 层)", flush=True)
+    ok = True
+    for sp in subs:
+        if not send_chunk_robust(sp, sid, depth + 1):
+            ok = False
+        time.sleep(0.6)
+    return ok
+
+
+# ---------------------------------------------------------------------------
 # 主流程
 # ---------------------------------------------------------------------------
 def main():
@@ -1432,7 +1590,7 @@ def main():
 
         t_seg = time.perf_counter()
         parts = build_message_parts(article, blocks)
-        chunks = chunk_parts(parts, MAX_MSG_LEN, MAX_MSG_BYTES)
+        chunks = add_continuation_marks(chunk_parts(parts, MAX_MSG_LEN, MAX_MSG_BYTES))
         t_layout = time.perf_counter() - t_seg
         tr_n = len(state.get("tr_cache", {}))
         print(f"[info] id={sid} 排版完成: {len(parts)} 段, 拆成 {len(chunks)} 条消息 "
@@ -1449,14 +1607,12 @@ def main():
             continue
 
         # 推送
-        # ack 基于内容 hash(同内容恒定, 纯数字格式兼容接口):
+        # ack 基于"公告 id + 本条内容" hash(同内容恒定, 纯数字格式兼容接口):
         # 若黑盒按 heychat_ack_id 幂等去重, 推送超时但实际成功后的重推
-        # 不会在频道产生重复消息(原来是时间戳, 每次重推都不同)
-        ack_base = str(int(h[:12], 16))   # 12 hex = 48bit, < 2^53, 保持数字字符串
+        # 不会在频道产生重复消息。失败会自动劈半重发, 减少整块内容被静默丢掉。
         sent = 0
-        for i, c in enumerate(chunks, 1):
-            ack = f"{ack_base}{i:02d}"
-            if not send_heychat(c, ack):
+        for c in chunks:
+            if not send_chunk_robust(c, sid):
                 break
             sent += 1
             time.sleep(0.6)  # 避免触发限频
@@ -1621,7 +1777,7 @@ def self_test() -> bool:
     check("含中文行保留", _should_keep_original("维护将在明天开始"))
 
     # 4) 粗体清理与平衡
-    check("奇数粗体清理", fix_bold_balance("**a**b**") == "ab")
+    check("奇数粗体清理(只去掉末尾不成对的那个)", fix_bold_balance("**a**b**") == "**a**b")
     check("偶数粗体保留", fix_bold_balance("**a**") == "**a**")
     check("clean_markdown 空粗体", clean_markdown("** **") == "**")
 
@@ -1719,6 +1875,63 @@ def self_test() -> bool:
           and not _remote_same({"pushed_map": {"45621": "abc"}}, "45621", "def")
           and not _remote_same({}, "45621", "abc")
           and not _remote_same(None, "45621", "abc"))
+
+    # 9) 排版增强: 头部压缩 / 配图策略 / 续标 / ack(纯本地, 不走网络)
+    art = {"id": 45621, "title_cn": "测试公告", "liveDate": "2026-09-04T01:00:00Z",
+           "imageThumbnail": "/media/abc/cover.png"}
+    body_blocks = [("heading", "小节标题"), ("para", "正文一段"),
+                   ("img", "https://g.nexonstatic.com/media/x/a.png"),
+                   ("img", "https://g.nexonstatic.com/media/x/a.png"),
+                   ("img", "https://g.nexonstatic.com/media/x/b.png"),
+                   ("divider", ""), ("divider", "")]
+    bp = build_message_parts(art, body_blocks)
+    check("标题独占首行", bp[0] == "# 测试公告")
+    check("头部元信息压成一行(作者+发布时间)",
+          "**作者**：" in bp[1] and "**发布时间**：" in bp[1] and "｜" in bp[1])
+    check("伪小标题降为整行粗体(不再抢 ## 层级)",
+          "**小节标题**" in bp and all(not p.startswith("## ") for p in bp))
+    check("正文重复分隔线只留一条", sum(1 for p in bp if p == DIVIDER) == 2)   # 头部 1 + 正文 1
+    check("配图 off 模式: 去重后提示原文有图",
+          any(p == "（本文另有 2 张配图，见上方原文链接）" for p in bp))
+    check("配图 off 模式不输出图片地址", all("g.nexonstatic.com" not in p for p in bp))
+
+    _saved_img_style = globals()["IMG_STYLE"]
+    globals()["IMG_STYLE"] = "link"
+    bp_link = build_message_parts(art, body_blocks)
+    check("配图 link 模式: 输出可点链接(实测可用)",
+          "🖼 [配图 1](https://g.nexonstatic.com/media/x/a.png)" in bp_link
+          and "🖼 [配图 2](https://g.nexonstatic.com/media/x/b.png)" in bp_link
+          and not any("🖼 [配图 3]" in p for p in bp_link))     # 同一 URL 已去重
+    globals()["IMG_STYLE"] = "html"
+    check("配图 html 模式",
+          any(p.startswith('<img src="') for p in build_message_parts(art, body_blocks)))
+    globals()["IMG_STYLE"] = _saved_img_style
+
+    mk = add_continuation_marks(["正文一", "正文二", "正文三"])
+    check("多条: 首条末尾提示未完", mk[0].endswith("（1/3・未完，接续见下）"))
+    check("多条: 后续开头标注续接",
+          mk[1].startswith("（续 2/3）") and mk[2].startswith("（续 3/3）"))
+    check("单条不加续标", add_continuation_marks(["只有一条"]) == ["只有一条"])
+
+    a = ack_id("45621", "内容")
+    check("ack 为纯数字且 < 2^53", a.isdigit() and int(a) < 2 ** 53)
+    check("ack 同输入恒定 / 不同内容不同",
+          a == ack_id("45621", "内容") and a != ack_id("45621", "内容2"))
+    check("图片工具: 相对路径补全",
+          normalize_img_url("/media/a/b.png") == IMG_BASE + "/media/a/b.png")
+    check("图片工具: 只收 http(s)",
+          normalize_img_url("x.png") == "" and normalize_img_url("") == ""
+          and normalize_img_url("https://a/b.png") == "https://a/b.png")
+    check("图片工具: 装饰图识别",
+          is_decorative_img("https://g/x/fa-header.gif")
+          and is_decorative_img("https://g/x/top-content-bg-wrap.png")
+          and not is_decorative_img("https://g/x/keybindings.png"))
+    check("图片工具: 行内小图标识别",
+          is_small_img(50, 50, "https://g/x/red-potion.png")
+          and is_small_img(0, 0, "https://g/x/c.png?width=50&height=48&mode=Max")
+          and not is_small_img(500, 500, "https://g/x/maple-island.png")
+          and not is_small_img(126, 161, "https://g/x/communityboard.png")
+          and not is_small_img(0, 0, "https://g/x/kdfaccess.png"))
 
     print(("[self-test] 结果: " + ("全部通过" if ok else "存在失败")), flush=True)
     return ok
