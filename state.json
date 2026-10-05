@@ -1,7 +1,7 @@
 {
   "pushed_id": "45621",
   "pushed_hash": "caeab07120e27e53",
-  "pushed_at": "2026-10-04 08:11:08",
+  "pushed_at": "2026-10-05 11:55:28",
   "title": "Founder's Access Release Notes",
   "tr_cache": {
     "October 6, 2026 6:00 PM UTC": "2026年10月6日 下午6:00 UTC",
@@ -131,7 +131,8 @@
     "Zombie": "僵尸",
     "Join Founder’s Access": "加入创始人礼包",
     "There’s still time to join us! Founder’s Packages are available on the [Nexon 网页](https://www.nexon.com/mscw/pre-launch-sales) and [Steam](https://store.steampowered.com/app/5142560/MapleStory_Classic_World__Zakum_Package/) through **October 14, 2026 at 11:59 PM PDT**. Choose the 橙色蘑菇 or 扎昆礼包 to get Founder’s Access and start your 冒险岛怀旧服 adventure before Grand Launch!": "现在加入我们还来得及！创始人礼包可在 [Nexon 网页](https://www.nexon.com/mscw/pre-launch-sales) 和 [Steam](https://store.steampowered.com/app/5142560/MapleStory_Classic_World__Zakum_Package/) 购买，截止时间为 **2026 年 10 月 14 日太平洋夏令时间晚上 11:59**。选择橙色蘑菇或扎昆礼包，即可获得创始人资格，在正式公测之前开启你的冒险岛怀旧服之旅！",
-    "创始人资格 Release Notes": "创始人资格更新说明"
+    "创始人资格 Release Notes": "创始人资格更新说明",
+    "Crafting** is a brand-new 冒险岛怀旧服 system available to 角色 Lv. 10 and above. Turn the materials you collect into items that will help you out on your adventure!": "制作**是冒险岛怀旧服中全新推出的系统，角色等级达到 10 及以上即可使用。把你收集到的材料制作成道具，它们会在你的冒险旅途中助你一臂之力！"
   },
   "tr_cache_ver": "1150-ed962fa7fdd5",
   "pushed_map": {
@@ -140,7 +141,8 @@
     "44134": "56421c3066f2fe6b",
     "44825": "495aed3ea53b8d68",
     "45385": "0f1f5f9e63243168",
-    "45521": "1fa2c59f5d88ae64"
+    "45521": "1fa2c59f5d88ae64",
+    "45621": "caeab07120e27e53"
   },
   "last_live_date": {
     "43962": "2026-08-11T11:00:00Z",
@@ -148,7 +150,8 @@
     "44134": "2026-09-02T16:45:00Z",
     "44825": "2026-09-11T16:00:00Z",
     "45385": "2026-09-29T17:00:00Z",
-    "45521": "2026-09-29T17:52:00Z"
+    "45521": "2026-09-29T17:52:00Z",
+    "45621": "2026-10-03T13:30:00Z"
   },
-  "push_lag_min": 641
+  "push_lag_min": 2305
 }
