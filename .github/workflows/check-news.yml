@@ -53,8 +53,7 @@ jobs:
           # MAX_MSG_LEN: "1500"
           # PUSH_ON_CONTENT_UPDATE: "1"
           # MAX_NEWS_PER_RUN: "5"      # 单次最多推送条数(防停机恢复刷屏)
-          # 48=默认值; 临时放大: 用于把频道里已有的历史公告重推一遍(重推完可改回 48)
-          MAX_NEWS_AGE_HOURS: "1400"
+          # MAX_NEWS_AGE_HOURS: "48"   # 48=默认值; 临时放大: 用于把频道里已有的历史公告重推一遍(重推完可改回 48)
           # LAG_ALERT_MIN: "30"        # 发布->推送延迟告警阈值(分钟)
         run: python main.py
 
