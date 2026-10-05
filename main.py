@@ -836,9 +836,10 @@ def _deepseek_call(texts, tl="zh-CN"):
         "7. Mapler/Maplers 是 MapleStory 对玩家的称呼（社区自造词，等同于“冒险家/玩家”），"
         "单数 Mapler 必须译成“冒险家”、复数 Maplers 译成“冒险家们”，也可用“玩家”，"
         "绝对不能音译成“梅普勒斯”之类的人名。\n"
-        "8. 文本里形如 ⟦NPC1⟧、⟦NPC2⟧ 的记号是**不可翻译的 NPC 名占位符**："
-        "必须把它原样、完整地保留在译文的对应位置，不得翻译、不得改写、不得增删"
-        "括号或编号、不得把它当成普通文字处理；译文里保留多少个，就说明有多少个 NPC 名。\n\n"
+        "8. 文本里形如 ⟦NPC1⟧、⟦NPC2⟧ 的记号是**不可翻译的 NPC 名占位符**，"
+        "形如 ⟦BJ1⟧、⟦BJR1⟧ 的是**北京时间标注占位符**：两类都必须把它原样、完整地保留在"
+        "译文的对应位置，不得翻译、不得改写、不得增删括号或编号、不得把它当成普通文字处理；"
+        "译文里保留多少个，就说明有多少个 NPC 名/时间标注。\n\n"
         + json.dumps(texts, ensure_ascii=False)
     )
     payload = {
@@ -1011,6 +1012,182 @@ def _fix_greeting_prefix(text: str):
     return "各位冒险家，你们好！" + text[m.end():]
 
 
+# ---------------------------------------------------------------------------
+# 北京时间换算(2026-10-05 需求: 公告里的时间在原文后面补一个括号写换算后的北京时间)
+# 做法: 先把「（北京时间 …）」写成 ⟦BJ1⟧ 占位符再送翻译, 译完回填 —— 换算在本地算死,
+#       不会因引擎改写句子而丢失或搬位置(和 NPC 名保护同一套路)。
+# ---------------------------------------------------------------------------
+# 已知时区偏移(小时); 表里没有的、或原文未写时区的一律不换算(宁可不加, 也不能算错)。
+# 注: 故意不收 CST/IST 这类同名不同义的缩写。
+_BJ_TZ_OFFSET = {
+    "UTC": 0, "GMT": 0, "PST": -8, "PDT": -7, "MST": -7, "MDT": -6,
+    "EST": -5, "EDT": -4, "CET": 1, "CEST": 2, "BST": 1,
+    "KST": 9, "JST": 9, "AEST": 10,
+}
+_BJ_MONTH = {
+    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5,
+    "june": 6, "july": 7, "august": 8, "september": 9, "october": 10,
+    "november": 11, "december": 12,
+}
+_BJ_TZ_ALT = "|".join(sorted(_BJ_TZ_OFFSET, key=len, reverse=True))
+_BJ_MON_ALT = "|".join(sorted(_BJ_MONTH, key=len, reverse=True))
+_BJ_CLOCK = r"(?P<h>\d{1,2}):(?P<mi>\d{2})\s*(?P<ap>AM|PM)"
+_BJ_DT_RE = re.compile(
+    r"\b(?P<mon>%s)\s+(?P<day>\d{1,2}),\s*(?P<year>\d{4})\s*(?:at\s+)?%s\s*(?P<tz>%s)\b"
+    % (_BJ_MON_ALT, _BJ_CLOCK, _BJ_TZ_ALT), re.IGNORECASE)
+_BJ_CLOCK_RE = re.compile(r"%s\s*(?P<tz>%s)\b" % (_BJ_CLOCK, _BJ_TZ_ALT),
+                          re.IGNORECASE)
+_BJ_RANGE_RE = re.compile(
+    r"(⟦BJ[A-Z]?\d+⟧)(\s*(?:[-–~]|to)\s*)([^⟦]{1,60}?)(⟦BJ[A-Z]?\d+⟧)",
+    re.IGNORECASE)
+# 形如 "August 11, 2026 (PDT): 4:00 PM - 6:00 PM": 时区写在括号里, 后面的时间共用它
+_BJ_CLOCK_NC = r"\d{1,2}:\d{2}\s*(?:AM|PM)"
+_BJ_TZGROUP_RE = re.compile(
+    r"\b(?P<mon>%s)\s+(?P<day>\d{1,2}),\s*(?P<year>\d{4})\s*\((?P<tz>%s)\)\s*:?\s*"
+    r"(?P<run>%s(?:\s*(?:-|–|~|,|and)\s*%s)*)"
+    % (_BJ_MON_ALT, _BJ_TZ_ALT, _BJ_CLOCK_NC, _BJ_CLOCK_NC), re.IGNORECASE)
+_BJ_RUN_CLOCK_RE = re.compile(r"(\d{1,2}):(\d{2})\s*(AM|PM)", re.IGNORECASE)
+# 回填用的宽松匹配: 容忍模型写成 "⟦ BJ 1 ⟧"/"【BJ1】"/全角数字等变体
+_BJ_TOKEN_ANY_RE = re.compile(r"[⟦【\[]\s*BJ\s*(R?)\s*([0-9０-９]+)\s*[⟧】\]]",
+                              re.IGNORECASE)
+
+
+def _bj_hour(h, ap):
+    """12 小时制 -> 24 小时制; 非法值返回 None。"""
+    try:
+        v = int(h)
+    except (TypeError, ValueError):
+        return None
+    if not 1 <= v <= 12:
+        return None
+    return v % 12 + (12 if (ap or "").upper() == "PM" else 0)
+
+
+def _bj_datetime_text(m):
+    """日期+时间+时区 -> 北京时间文本(如 "10月7日 02:00"; 跨年时带年份)。"""
+    mon = _BJ_MONTH.get(m.group("mon").lower())
+    off = _BJ_TZ_OFFSET.get(m.group("tz").upper())
+    hh = _bj_hour(m.group("h"), m.group("ap"))
+    if mon is None or off is None or hh is None:
+        return None
+    try:
+        dt = datetime(int(m.group("year")), mon, int(m.group("day")), hh,
+                      int(m.group("mi")))
+    except ValueError:
+        return None
+    bj = dt - timedelta(hours=off) + timedelta(hours=8)
+    if bj.year != dt.year:
+        return "%d年%d月%d日 %02d:%02d" % (bj.year, bj.month, bj.day, bj.hour, bj.minute)
+    return "%d月%d日 %02d:%02d" % (bj.month, bj.day, bj.hour, bj.minute)
+
+
+def _bj_clock_text(m):
+    """纯时间+时区 -> 北京时间文本(如 "08:00"; 只换算到点, 日期看原句里的日期)。"""
+    off = _BJ_TZ_OFFSET.get(m.group("tz").upper())
+    hh = _bj_hour(m.group("h"), m.group("ap"))
+    if off is None or hh is None:
+        return None
+    minutes = (hh * 60 + int(m.group("mi")) - off * 60 + 8 * 60) % (24 * 60)
+    return "%02d:%02d" % (minutes // 60, minutes % 60)
+
+
+def _bj_tzgroup_text(m):
+    """日期+(时区)+时段 -> 北京时间文本(日期只写一次; 跨日则每个时间各带日期)。"""
+    mon = _BJ_MONTH.get(m.group("mon").lower())
+    off = _BJ_TZ_OFFSET.get(m.group("tz").upper())
+    if mon is None or off is None:
+        return None
+    year, day = int(m.group("year")), int(m.group("day"))
+    outs = []
+    for cm in _BJ_RUN_CLOCK_RE.finditer(m.group("run")):
+        hh = _bj_hour(cm.group(1), cm.group(3))
+        if hh is None:
+            return None
+        try:
+            dt = datetime(year, mon, day, hh, int(cm.group(2)))
+        except ValueError:
+            return None
+        bj = dt - timedelta(hours=off) + timedelta(hours=8)
+        if bj.year != year:
+            outs.append("%d年%d月%d日 %02d:%02d" % (bj.year, bj.month, bj.day,
+                                                   bj.hour, bj.minute))
+        else:
+            outs.append((bj, "%02d:%02d" % (bj.hour, bj.minute)))
+    if not outs:
+        return None
+    if isinstance(outs[0], str):          # 已在上面写成带年份的完整形式
+        return " - ".join(outs)
+    days = {(o[0].year, o[0].month, o[0].day) for o in outs}
+    if len(days) == 1:
+        bj = outs[0][0]
+        return "%d月%d日 " % (bj.month, bj.day) + " - ".join(o[1] for o in outs)
+    return " - ".join("%d月%d日 %s" % (o[0].month, o[0].day, o[1]) for o in outs)
+
+
+def _inject_beijing(text: str):
+    """把「（北京时间 …）」写成 ⟦BJ1⟧ 占位符, 返回 (新文本, {占位符: 括号内容})。
+
+    相邻两个时间由 -/~/– 连接时合并成一个括号, 例如
+    "October 6, 2026 6:00 PM UTC - October 20, 2026 11:59 PM UTC"
+      -> 原文（北京时间 10月7日 02:00 - 10月21日 07:59）"""
+    hits = []   # (start, end, 北京时间文本)
+    for rex, conv in ((_BJ_TZGROUP_RE, _bj_tzgroup_text),
+                      (_BJ_DT_RE, _bj_datetime_text),
+                      (_BJ_CLOCK_RE, _bj_clock_text)):
+        for m in rex.finditer(text):
+            if any(m.start() < e and s < m.end() for s, e, _z in hits):
+                continue                      # 这段只是上面日期时间的一部分
+            zh = conv(m)
+            if zh:
+                hits.append((m.start(), m.end(), zh))
+    if not hits:
+        return text, {}
+    hits.sort()
+    notes, out = {}, text
+    for i in range(len(hits) - 1, -1, -1):    # 从后往前插, 不影响前面的下标
+        s, e, zh = hits[i]
+        ph = "⟦BJ%d⟧" % (i + 1)
+        notes[ph] = zh
+        out = out[:e] + ph + out[e:]
+
+    def _merge(m):
+        # 形如 "…UTC⟦BJ1⟧ - October 20, 2026 11:59 PM UTC⟦BJ2⟧": 去掉前一个占位符,
+        # 两个时间合用一个括号放到后一个时间后面
+        a, sep, mid, b = m.group(1), m.group(2), m.group(3), m.group(4)
+        za, zb = notes.pop(a, ""), notes.pop(b, "")
+        if not za or not zb:
+            return m.group(0)
+        ph = "⟦BJR%d⟧" % (len(notes) + 1)
+        notes[ph] = "%s - %s" % (za, zb)
+        return sep + mid + ph
+
+    out = _BJ_RANGE_RE.sub(_merge, out)
+    return out, {ph: "（北京时间 %s）" % t for ph, t in notes.items()}
+
+
+def _normalize_bj(text: str) -> str:
+    """把模型写成变体的北京时间占位符（⟦ BJ 1 ⟧ / 【BJ1】 / 全角数字）统一回 ⟦BJ1⟧。"""
+    return _BJ_TOKEN_ANY_RE.sub(
+        lambda m: "⟦BJ%s%s⟧" % (m.group(1).upper(),
+                                m.group(2).translate(_FULLWIDTH_DIGITS)), text)
+
+
+def _unmask_beijing(text: str, mapping) -> str:
+    """回填北京时间括号（占位符被写成变体也认）。"""
+    if not text or not mapping:
+        return text
+    text = _normalize_bj(text)
+    for ph, zh in mapping.items():
+        text = text.replace(ph, zh)
+    return text
+
+
+def beijing_annotate(text: str) -> str:
+    """给文本里的时间补「（北京时间 …）」(注入+回填一步到位, 自测与离线预览用)。"""
+    out, mapping = _inject_beijing(text)
+    return _unmask_beijing(out, mapping)
+
+
 def translate_blocks(blocks, state=None, title_texts=None):
     """翻译所有块里的文本；返回 (新块列表, 标题译文列表或 None)。翻译失败时保留原文。
     title_texts: [(原文, 术语替换后)] 标题翻译单元, 与正文并入同一批量(省一次 API 调用)。
@@ -1018,22 +1195,31 @@ def translate_blocks(blocks, state=None, title_texts=None):
     段落按行拆分翻译（多时区段落每行独立判断, 时间行保留英文原文）。
     术语替换(国服译名)发生在翻译前; "是否保留原文"的判断基于替换前的原始文本,
     避免术语混入中文后整行被误判为"已翻译"而跳过（导致半中半英）。"""
-    # 收集翻译单元: (block_index, 位置描述, 原始文本, 术语替换后文本)
+    # 收集翻译单元: (block_index, 位置描述, 原始文本, 注入占位符后的文本, 术语替换后文本)
+    # 时间行的「（北京时间 …）」先写成 ⟦BJ1⟧, 翻译完再回填(见 _inject_beijing)
     units = []
+    bj_maps = {}
+
+    def _add_unit(b, k, li, raw):
+        inj, bj_map = _inject_beijing(raw)
+        if bj_map:
+            bj_maps[(b, k, li)] = bj_map
+        units.append((b, k, li, raw, inj, apply_terms(inj)))
+
     for bi, blk in enumerate(blocks):
         if blk[0] == "heading":
-            units.append((bi, "heading", None, blk[1], apply_terms(blk[1])))
+            _add_unit(bi, "heading", None, blk[1])
         elif blk[0] == "para":
             for li, line in enumerate(blk[1].split("\n")):
-                units.append((bi, "para", li, line, apply_terms(line)))
+                _add_unit(bi, "para", li, line)
         elif blk[0] == "list":
             for ii, item in enumerate(blk[1]):
-                it = item[0] if isinstance(item, tuple) else item
-                units.append((bi, "list", ii, it, apply_terms(it)))
+                _add_unit(bi, "list", ii,
+                          item[0] if isinstance(item, tuple) else item)
     # 标题并入同一批次: kind="title" 不做保留原文判断, 永远送翻译(已纯中文则直接使用)
     if title_texts:
-        for i, (raw, rep) in enumerate(title_texts):
-            units.append((None, "title", i, raw, rep))
+        for i, (raw, _rep) in enumerate(title_texts):
+            _add_unit(None, "title", i, raw)
 
     # 决定哪些需要翻译: 时间行/网址/已含中文行基于"原始文本"直接保留;
     # 其余默认用"术语替换后文本"(至少术语已译), 交给翻译服务处理剩余英文。
@@ -1052,7 +1238,11 @@ def translate_blocks(blocks, state=None, title_texts=None):
             return
         need_units.append((b, k, li, masked, mapping, raw))
 
-    for (b, k, li, raw, rep) in units:
+    def _keep_bj(key, text):
+        """保留原文/固定译法分支: 把该单元的北京时间占位符接在结尾, 重建时统一回填。"""
+        return text + "".join(bj_maps.get(key, {}))
+
+    for (b, k, li, raw, inj, rep) in units:
         if k == "title":
             tr_map[(b, k, li)] = rep
             if re.search(r"[A-Za-z]", rep):
@@ -1060,25 +1250,28 @@ def translate_blocks(blocks, state=None, title_texts=None):
         elif k == "heading":
             ov = HEADING_OVERRIDES.get(raw.strip(), None)
             if ov is not None:
-                tr_map[(b, k, li)] = ov
+                tr_map[(b, k, li)] = _keep_bj((b, k, li), ov)
             else:
-                tr_map[(b, k, li)] = rep
+                tr_map[(b, k, li)] = inj
                 if re.search(r"[A-Za-z]", rep):
                     _need(b, k, li, rep, raw)
         elif SIGNATURE_FIX.get(raw.strip()) is not None:
             # 结尾署名/客套行: 固定译法, 不依赖翻译引擎(防署名丢失/译歪)
-            tr_map[(b, k, li)] = SIGNATURE_FIX[raw.strip()]
+            tr_map[(b, k, li)] = _keep_bj((b, k, li), SIGNATURE_FIX[raw.strip()])
         elif GREETING_FIX.get(raw.strip()) is not None:
             # 开场问候行(如 Hi Maplers,): 固定译法, 防止引擎把 Maplers 音译成"梅普勒斯"
-            tr_map[(b, k, li)] = GREETING_FIX[raw.strip()]
+            tr_map[(b, k, li)] = _keep_bj((b, k, li), GREETING_FIX[raw.strip()])
         elif _should_keep_original(raw):
-            tr_map[(b, k, li)] = raw
+            tr_map[(b, k, li)] = inj
         else:
             # 行首问候语与正文同段时(2026-10-03 起官网的写法), 整行精确匹配失效:
             # 先把问候前缀固定成中文, 其余英文照常送翻译引擎
             greeted = _fix_greeting_prefix(raw)
             if greeted is not None:
-                rep = apply_terms(greeted)
+                inj, bj_map = _inject_beijing(greeted)
+                if bj_map:
+                    bj_maps[(b, k, li)] = bj_map
+                rep = apply_terms(inj)
             tr_map[(b, k, li)] = rep
             if re.search(r"[A-Za-z]", rep):
                 _need(b, k, li, rep, raw)
@@ -1101,21 +1294,34 @@ def translate_blocks(blocks, state=None, title_texts=None):
                 tr = raw
             tr_map[(b, k, li)] = tr
 
+    def _fill_bj(key, text):
+        """回填「（北京时间 …）」; 万一占位符被引擎吃掉, 直接补在结尾, 别把换算结果丢了。"""
+        mp = bj_maps.get(key)
+        if not mp or not text:
+            return text
+        norm = _normalize_bj(text)
+        dropped = [zh for ph, zh in mp.items() if ph not in norm]
+        return _unmask_beijing(norm, mp) + "".join(dropped)
+
     # 用翻译结果重建块: 建立 (bi, kind, li) -> 翻译文本 的映射
     new_blocks = []
     for bi, blk in enumerate(blocks):
         if blk[0] == "heading":
-            new_blocks.append(("heading", tr_map.get((bi, "heading", None), blk[1])))
+            new_blocks.append(("heading", _fill_bj(
+                (bi, "heading", None),
+                tr_map.get((bi, "heading", None), blk[1]))))
         elif blk[0] == "para":
             lines = blk[1].split("\n")
             for li in range(len(lines)):
-                lines[li] = tr_map.get((bi, "para", li), lines[li])
+                lines[li] = _fill_bj((bi, "para", li),
+                                     tr_map.get((bi, "para", li), lines[li]))
             new_blocks.append(("para", "\n".join(lines)))
         elif blk[0] == "list":
             items = list(blk[1])
             for ii in range(len(items)):
                 tr = tr_map.get((bi, "list", ii))
                 if tr is not None:
+                    tr = _fill_bj((bi, "list", ii), tr)
                     if isinstance(items[ii], tuple):
                         items[ii] = (tr, items[ii][1])   # 保留嵌套层级
                     else:
@@ -1126,7 +1332,8 @@ def translate_blocks(blocks, state=None, title_texts=None):
 
     title_out = None
     if title_texts:
-        title_out = [tr_map.get((None, "title", i), title_texts[i][1])
+        title_out = [_fill_bj((None, "title", i),
+                              tr_map.get((None, "title", i), title_texts[i][1]))
                      for i in range(len(title_texts))]
     return new_blocks, title_out
 
@@ -1766,6 +1973,39 @@ def self_test() -> bool:
     check("jump quest 译作跳跃任务",
           apply_terms("take on a jump quest within 15 minutes")
           == "take on a 跳跃任务 within 15 minutes")
+
+    # 北京时间换算(2026-10-05 需求: 时间后面补括号写换算后的北京时间)
+    check("北京时间: 日期+时间(跨日)",
+          beijing_annotate("Claim by November 30, 2026 at 11:59 PM UTC.")
+          == "Claim by November 30, 2026 at 11:59 PM UTC（北京时间 12月1日 07:59）.")
+    check("北京时间: 日期时间区间合并成一个括号",
+          beijing_annotate("October 6, 2026 6:00 PM UTC - October 20, 2026 11:59 PM UTC")
+          == "October 6, 2026 6:00 PM UTC - October 20, 2026 11:59 PM UTC"
+             "（北京时间 10月7日 02:00 - 10月21日 07:59）")
+    check("北京时间: 纯时间区间 / PDT / 跨年带年份",
+          beijing_annotate("Time: 12:00 AM UTC - 2:00 AM UTC")
+          == "Time: 12:00 AM UTC - 2:00 AM UTC（北京时间 08:00 - 10:00）"
+          and beijing_annotate("October 14, 2026 at 11:59 PM PDT")
+          == "October 14, 2026 at 11:59 PM PDT（北京时间 10月15日 14:59）"
+          and beijing_annotate("December 31, 2026 11:00 PM UTC")
+          == "December 31, 2026 11:00 PM UTC（北京时间 2027年1月1日 07:00）")
+    check("北京时间: 形如「日期 (PDT): 时段」的写法",
+          beijing_annotate("August 11, 2026 (PDT): 4:00 PM - 6:00 PM")
+          == "August 11, 2026 (PDT): 4:00 PM - 6:00 PM（北京时间 8月12日 07:00 - 09:00）")
+    check("北京时间: 纯日期/没写时区的一律不动",
+          beijing_annotate("October 21, 2026") == "October 21, 2026"
+          and beijing_annotate("Meet at 6:00 PM") == "Meet at 6:00 PM"
+          and beijing_annotate("October 7, 14 | Time: 1:00 AM UTC - 2:00 AM UTC")
+          == "October 7, 14 | Time: 1:00 AM UTC - 2:00 AM UTC（北京时间 09:00 - 10:00）")
+    check("北京时间: 占位符被写成变体也能回填",
+          _unmask_beijing("时间 October 6, 2026 6:00 PM UTC【 BJ 1 】。",
+                          {"⟦BJ1⟧": "（北京时间 10月7日 02:00）"})
+          == "时间 October 6, 2026 6:00 PM UTC（北京时间 10月7日 02:00）。")
+    _b2, _ = translate_blocks([("para", "October 6, 2026 6:00 PM UTC")],
+                              state={"tr_cache": {},
+                                     "tr_cache_ver": _terms_fingerprint()})
+    check("北京时间: 端到端(时间行保留英文 + 补北京时间)",
+          _b2[0][1] == "October 6, 2026 6:00 PM UTC（北京时间 10月7日 02:00）")
 
     # 2) HTML 解析 + 小标题识别
     html = ("<h2><strong>Times:</strong></h2>"
