@@ -188,8 +188,38 @@ _URL_RE = re.compile(
 )
 
 
+# 惯用语短语固定译法: 必须在单词术语替换之前整体命中(短语优先于单词)。
+# 踩坑(45621 实测): 原文 "to ensure you can jump into the game the moment servers go live"
+# 里的 jump 被术语表命中成「跳跃力」(terms.json 里 jump 是属性名, 对 "jump quest" 是对的),
+# 译文变成"…确保你能在服务器上线的那一刻 跳跃力 进入游戏"。
+# 这里先把整段惯用语钉成中文, 单词术语替换就碰不到它; "jump quest"/"jumping" 等真·跳跃
+# 用法不受影响。新增时按"长短语在前"排列即可(不碰 terms.json, 翻译缓存指纹不变)。
+PHRASE_FIX = [
+    # 专有名词/系统名: 钉死国服译名, 避免引擎自由发挥(同篇两种叫法)
+    # 或术语表按单词抢先替换(踩坑: Maple Island 里的 Maple 被命中 -> 误作"冒险岛")
+    ("Join Founder’s Access", "加入创始人抢先体验"),   # 弯引号 ’ 版本
+    ("Join Founder's Access", "加入创始人抢先体验"),   # 直引号 ' 版本
+    ("Atmospheric Effect Box", "氛围效果箱"),
+    ("Victoria Island", "金银岛"),
+    ("Maple Island", "枫叶岛"),
+    ("Arcforge", "炼金"),
+    # 惯用语: 短语优先, 免得 jump 被属性术语吃掉
+    ("jump right into the game", "马上进入游戏"),
+    ("jump right in", "马上加入"),
+    ("jump into the game", "进入游戏"),
+    ("jump quest", "跳跃任务"),
+]
+
+_PHRASE_PATTERNS = [
+    (re.compile(r"(?<![\w])" + re.escape(en) + r"(?![\w])", re.IGNORECASE), zh)
+    for en, zh in PHRASE_FIX
+]
+
+
 def _sub_terms(text: str) -> str:
-    """对一段纯文本(不含网址/NPC 名)执行术语替换。"""
+    """对一段纯文本(不含网址/NPC 名)执行术语替换: 惯用语短语优先, 再走单词术语。"""
+    for pat, zh in _PHRASE_PATTERNS:
+        text = pat.sub(zh, text)
     for pat, zh in _TERM_PATTERNS:
         text = pat.sub(zh, text)
     return text
@@ -213,8 +243,9 @@ def _protected_spans(text: str):
 
 
 def apply_terms(text: str) -> str:
-    """把美服英文术语替换为国服冒险岛中文译名(词边界匹配, 长词优先; 网址与 NPC 名跳过)。"""
-    if not _TERM_PATTERNS:
+    """把美服英文术语替换为国服冒险岛中文译名(词边界匹配, 长词优先; 网址与 NPC 名跳过;
+    惯用语短语 PHRASE_FIX 优先于单词术语)。"""
+    if not _TERM_PATTERNS and not _PHRASE_PATTERNS:
         return text
     out, last = [], 0
     for start, end in _protected_spans(text):
@@ -1705,6 +1736,32 @@ def self_test() -> bool:
     check("占位符丢失可被侦测(调用方退回英文原文)",
           _unmask_npcs("与某人对话。", {"⟦NPC1⟧": "Dark Lord"}) == ("与某人对话。", ["Dark Lord"]))
     check("非 NPC 文本不受影响", _mask_npcs("Hello Maplers!") == ("Hello Maplers!", {}))
+
+    # 惯用语短语优先于单词术语(2026-10-05 修正 45621 的 "jump into the game" -> 跳跃力)
+    check("惯用语 jump into the game 不被当成属性 jump",
+          apply_terms("to ensure you can jump into the game the moment servers go live")
+          == "to ensure you can 进入游戏 the moment servers go live")
+    check("惯用语 jump right into the game 固定译法",
+          apply_terms("so you can jump right into the game") == "so you can 马上进入游戏")
+    check("惯用语短语匹配大小写不敏感",
+          apply_terms("Jump Into The Game now") == "进入游戏 now")
+    check("不是惯用语的 jump 仍走术语表(jumping 不误命中)",
+          apply_terms("jumping jacks") == "jumping jacks"
+          and apply_terms("Movement and jump are set to default")
+          == "Movement and 跳跃力 are set to default")
+
+    # 专有名词/系统名钉死(2026-10-05 核查线上 129 条译文缓存后新增)
+    check("专有名词钉死: Maple Island / Victoria Island(不再被 Maple 术语抢先替换)",
+          apply_terms("Starts on **Maple Island** before traveling to Victoria Island.")
+          == "Starts on **枫叶岛** before traveling to 金银岛.")
+    check("专有名词钉死: Arcforge / Atmospheric Effect Box",
+          apply_terms("Arcforge and Atmospheric Effect Box") == "炼金 and 氛围效果箱")
+    check("小标题 Join Founder’s Access 固定译法(弯/直引号都命中)",
+          apply_terms("Join Founder’s Access") == "加入创始人抢先体验"
+          and apply_terms("Join Founder's Access") == "加入创始人抢先体验")
+    check("jump quest 译作跳跃任务",
+          apply_terms("take on a jump quest within 15 minutes")
+          == "take on a 跳跃任务 within 15 minutes")
 
     # 2) HTML 解析 + 小标题识别
     html = ("<h2><strong>Times:</strong></h2>"
