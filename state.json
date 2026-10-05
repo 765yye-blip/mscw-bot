@@ -1,7 +1,7 @@
 {
   "pushed_id": "45621",
   "pushed_hash": "caeab07120e27e53",
-  "pushed_at": "2026-10-05 11:55:28",
+  "pushed_at": "2026-10-05 12:05:36",
   "title": "Founder's Access Release Notes",
   "tr_cache": {
     "October 6, 2026 6:00 PM UTC": "2026年10月6日 下午6:00 UTC",
@@ -132,7 +132,17 @@
     "Join Founder’s Access": "加入创始人礼包",
     "There’s still time to join us! Founder’s Packages are available on the [Nexon 网页](https://www.nexon.com/mscw/pre-launch-sales) and [Steam](https://store.steampowered.com/app/5142560/MapleStory_Classic_World__Zakum_Package/) through **October 14, 2026 at 11:59 PM PDT**. Choose the 橙色蘑菇 or 扎昆礼包 to get Founder’s Access and start your 冒险岛怀旧服 adventure before Grand Launch!": "现在加入我们还来得及！创始人礼包可在 [Nexon 网页](https://www.nexon.com/mscw/pre-launch-sales) 和 [Steam](https://store.steampowered.com/app/5142560/MapleStory_Classic_World__Zakum_Package/) 购买，截止时间为 **2026 年 10 月 14 日太平洋夏令时间晚上 11:59**。选择橙色蘑菇或扎昆礼包，即可获得创始人资格，在正式公测之前开启你的冒险岛怀旧服之旅！",
     "创始人资格 Release Notes": "创始人资格更新说明",
-    "Crafting** is a brand-new 冒险岛怀旧服 system available to 角色 Lv. 10 and above. Turn the materials you collect into items that will help you out on your adventure!": "制作**是冒险岛怀旧服中全新推出的系统，角色等级达到 10 及以上即可使用。把你收集到的材料制作成道具，它们会在你的冒险旅途中助你一臂之力！"
+    "Crafting** is a brand-new 冒险岛怀旧服 system available to 角色 Lv. 10 and above. Turn the materials you collect into items that will help you out on your adventure!": "制作**是冒险岛怀旧服中全新推出的系统，角色等级达到 10 及以上即可使用。把你收集到的材料制作成道具，它们会在你的冒险旅途中助你一臂之力！",
+    "We recommend that you pre-download 冒险岛怀旧服 before 创始人资格 begins, to ensure you can 进入游戏 the moment servers go live.": "我们建议你在创始人资格开始前预下载冒险岛怀旧服，以确保服务器上线时你能立即进入游戏。",
+    "Click 'Install' and 选择你的安装磁盘.": "点击“安装”并选择你的安装磁盘。",
+    "Every 角色 starts as a 新手 on **枫叶岛**. You’ll meet your first monsters, complete quests, and get familiar with the basics before traveling to 金银岛.": "每个角色都以新手身份在**枫叶岛**开始。在前往金银岛之前，你会遇到最初的怪物、完成任务并熟悉基础内容。",
+    "**金银岛** is home to multiple towns where you’ll choose your job and continue your adventure. Explore forests, mountains, dungeons, and more as you take on quests and meet other 冒险家们 along the way!": "**金银岛**上有多个城镇，你会在那里选择职业并继续你的冒险。你会探索森林、山脉、地下城等，一路接受任务，并结识其他冒险家们！",
+    "As you explore 金银岛, you may come across powerful bosses! Prepare your equipment and team up with other 冒险家们 to take on the 5 Bosses that will available to challenge:": "当你在金银岛探索时，可能会遇到强大的Boss！准备好装备，与其他冒险家们组队，挑战5个可供挑战的Boss：",
+    "**Citizenship** is a new 冒险岛怀旧服 system available to 角色 Lv. 12 and above. Get to know the people who call 金银岛 home! Official residents of 射手村 and 废弃都市 get special perks like:": "**市民资格**是冒险岛怀旧服中一项面向12级及以上角色的新系统。来认识那些把金银岛称为家园的人吧！射手村和废弃都市的正式居民可获得如下特殊福利：",
+    "氛围效果箱 (x3)": "氛围效果箱 (x3)",
+    "氛围效果箱 Details": "氛围效果箱详情",
+    "Open an **氛围效果箱** to randomly receive one of the following effects:": "打开一个**氛围效果箱**，随机获得以下效果之一：",
+    "Test your physical fitness and take on a 跳跃任务 within 15 minutes.": "在15分钟内测试你的体能，并挑战一个跳跃任务。"
   },
   "tr_cache_ver": "1150-ed962fa7fdd5",
   "pushed_map": {
@@ -141,7 +151,8 @@
     "44134": "56421c3066f2fe6b",
     "44825": "495aed3ea53b8d68",
     "45385": "0f1f5f9e63243168",
-    "45521": "1fa2c59f5d88ae64"
+    "45521": "1fa2c59f5d88ae64",
+    "45621": "caeab07120e27e53"
   },
   "last_live_date": {
     "43962": "2026-08-11T11:00:00Z",
@@ -149,7 +160,8 @@
     "44134": "2026-09-02T16:45:00Z",
     "44825": "2026-09-11T16:00:00Z",
     "45385": "2026-09-29T17:00:00Z",
-    "45521": "2026-09-29T17:52:00Z"
+    "45521": "2026-09-29T17:52:00Z",
+    "45621": "2026-10-03T13:30:00Z"
   },
-  "push_lag_min": 2305
+  "push_lag_min": 2316
 }
