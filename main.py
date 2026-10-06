@@ -539,12 +539,30 @@ def select_pending(news: list, state: dict, now=None) -> list:
 #    ('list', [项...]) 列表     ('divider',)  分隔线
 #    图片收进配图块(是否展示由 IMG_STYLE 决定); <a href> 链接转 Markdown [锚文本](URL)(实测支持渲染,
 #    点击名称跳转、正文不裸露完整网址, 2026-09-04 起; 空锚文本退回明文 URL);
+#    页内锚点链接(href="#小节名", 官网目录/小节跳转)补成"原文链接#小节名": 单个 #小节名 不是网址,
+#    黑盒里没有可打开的页面, 点击毫无反应(2026-10-06 公告 45819 的 Aurora Stamp Shop / Water of Life);
+#    拿不到原文链接时退回纯文本, 不生成点不动的死链接
 #    <strong> 转 **粗体**; <br> 转 \n
+#    划线价(删除线): 官网写作 <span style="text-decoration: line-through;">1,050 NX</span>
+#    <span style="color: #ff6600;">1,000 NX</span>, 意思是"原价 -> 现价"。黑盒语音是否渲染 ~~
+#    未实测, 所以不输出 ~~, 而是在划线段落结束处补一个 "→"
+#    (2026-10-05 公告 45819 "Founder's Access Cash Shop": 旧版把 <span> 当未知标签整个丢掉,
+#     推送里成了 "1,050 NX 1,000 NX", 读者分不清哪个是现价)
 # ---------------------------------------------------------------------------
+def _style_has_line_through(attrs) -> bool:
+    """<span> 的 style 属性里有没有删除线(兼容 text-decoration-line 与多值写法)。"""
+    for k, v in (attrs or []):
+        if (k or "").lower() == "style" and v:
+            return "line-through" in v.lower().replace(" ", "")
+    return False
+
+
 class _BodyParser(HTMLParser):
-    def __init__(self):
+    def __init__(self, link_base=""):
         super().__init__(convert_charrefs=True)
         self.blocks = []
+        # 公告原文地址: 用于把正文里的页内锚点链接补成完整网址(见 handle_endtag)
+        self.link_base = (link_base or "").strip()
         self._cur = None          # 当前段落字符列表
         self._lists = []          # 列表栈(支持嵌套 ul/li, 收尾时展平为单个 list 块)
         self._li = None           # 当前列表项字符列表
@@ -552,6 +570,7 @@ class _BodyParser(HTMLParser):
         self._hrefs = []          # <a> 链接栈: start 压入 href
         self._link_txts = []      # <a> 锚文本栈: 与 _hrefs 对齐, end 时生成 [文字](URL)
         self._link_imgs = []      # <a> 链接栈: 该链接内是否出现过 <img>(与 _hrefs 对齐)
+        self._strike = []         # 删除线栈: 每个 span/s/del/strike 压一个 bool, 逐个配对
         self._skip = 0            # script/style 内部跳过计数
 
     # ---- 内部工具 ----
@@ -562,6 +581,10 @@ class _BodyParser(HTMLParser):
         text = re.sub(r" *\n *", "\n", text)        # 去掉换行前后的空格
         text = re.sub(r"\n{3,}", "\n\n", text)
         text = re.sub(r"\*{4,}", "**", text)        # 相邻粗体标记归一化
+        # 划线价转来的箭头: 划线后面没有现价时(整句被划掉之类)去掉悬空箭头,
+        # 连续多个箭头也归一成一个, 免得正文出现 "Duration: 30 days →" 这种残句
+        text = re.sub(r" *→ *(?=\n|$)", "", text)
+        text = re.sub(r"→(?: *→)+", "→", text)
         return text.strip()
 
     def _flush_para(self):
@@ -592,6 +615,19 @@ class _BodyParser(HTMLParser):
                 return
             self._cur = []
         self._cur.append(s)
+
+    def _append_inline(self, s):
+        """把行内标记(目前只有划线价的 "→")追加到当前缓冲。
+
+        链接内写锚文本槽, 否则写当前列表项/段落; 只在缓冲已有内容时追加,
+        避免划线标签出现在正文最开头时凭空开出一段只有箭头的段落。
+        """
+        if self._link_txts:
+            self._link_txts[-1].append(s)
+            return
+        buf = self._li if self._in_li else self._cur
+        if buf:
+            buf.append(s)
 
     def _add_img(self, attrs):
         """<img> 收进配图块; 装饰图和行内小图标在收集阶段就丢掉(不输出地址)。"""
@@ -636,6 +672,12 @@ class _BodyParser(HTMLParser):
                 buf = self._li if self._in_li else self._cur
                 if buf is not None:
                     buf.append("*")
+        elif tag in ("s", "del", "strike", "span"):
+            # 删除线(划线价): 官网用 <span style="text-decoration: line-through;"> 表达,
+            # 也兼容 <s>/<del>/<strike>。这里只记栈、不输出标记, 由 handle_endtag 补 "→"。
+            # 用栈而不是计数器: 普通 <span style="color: ..."> 也走这条分支, 必须逐个配对。
+            self._strike.append(
+                tag in ("s", "del", "strike") or _style_has_line_through(attrs))
         elif tag == "a":
             # 记录 href(协议相对地址 // 补全为 https:); 锚文本进入 _link_txts 暂存
             href = ""
@@ -680,11 +722,24 @@ class _BodyParser(HTMLParser):
                 buf = self._li if self._in_li else self._cur
                 if buf is not None:
                     buf.append("*")
+        elif tag in ("s", "del", "strike", "span"):
+            # 划线价: 被划掉的数字后面通常紧跟现价, 补一个 "→" 表示"原价 -> 现价";
+            # 若划线后面没有现价(整句被划掉之类), _finalize 会把悬空箭头去掉
+            if self._strike and self._strike.pop():
+                self._append_inline(" → ")
         elif tag == "a":
             href = self._hrefs.pop() if self._hrefs else ""
             parts = self._link_txts.pop() if self._link_txts else []
             link_has_img = self._link_imgs.pop() if self._link_imgs else False
             label = re.sub(r"\s+", " ", "".join(parts)).strip()
+            if href.startswith("#"):
+                # 页内锚点链接(官网目录/小节跳转, 如 <a href="#petUtility">Water of Life</a>):
+                # href 不是网址, 直接转 [文字](#锚点) 在黑盒里点下去毫无反应
+                # (2026-10-06 用户反馈: 45819 的 "Aurora Stamp Shop" / "Water of Life" 点不动)。
+                # 这里补成"原文链接#小节名" —— 点开就是官网原文那篇公告(能否自动滚到该小节
+                # 取决于官网前端, 但至少跳转可用); 拿不到原文链接时按无 href 处理, 退回纯文本,
+                # 绝不推 [文字](#锚点) 这种死链接。
+                href = (self.link_base + href) if self.link_base else ""
             if not href:
                 # 无 href 的 <a>(如页内锚点): 锚文本原样保留
                 self._append_text(label)
@@ -749,11 +804,15 @@ class _BodyParser(HTMLParser):
         self._cur.append(data)
 
 
-def parse_body(body_html: str):
-    """解析正文 HTML, 返回结构块列表。"""
+def parse_body(body_html: str, link_base: str = ""):
+    """解析正文 HTML, 返回结构块列表。
+
+    link_base: 该公告的原文地址, 用来把正文里的页内锚点(href="#小节")补成完整可点链接;
+               不传(或传空)时锚点链接退回纯文本, 见 _BodyParser.handle_endtag。
+    """
     if not body_html:
         return []
-    p = _BodyParser()
+    p = _BodyParser(link_base)
     try:
         p.feed(body_html)
         p.close()
@@ -1002,7 +1061,10 @@ def _deepseek_call(texts, tl="zh-CN"):
         "8. 文本里形如 ⟦NPC1⟧、⟦NPC2⟧ 的记号是**不可翻译的 NPC 名占位符**，"
         "形如 ⟦BJ1⟧、⟦BJR1⟧ 的是**北京时间标注占位符**：两类都必须把它原样、完整地保留在"
         "译文的对应位置，不得翻译、不得改写、不得增删括号或编号、不得把它当成普通文字处理；"
-        "译文里保留多少个，就说明有多少个 NPC 名/时间标注。\n\n"
+        "译文里保留多少个，就说明有多少个 NPC 名/时间标注；\n"
+        "9. 原文里形如“1,050 NX → 1,000 NX”的箭头表示“原价 → 现价”"
+        "（官网把原价打了删除线，本项目在解析时转成这个箭头）：箭头必须原样保留、"
+        "左右价格顺序不得调换，不得删除，也不得改成别的字或符号。\n\n"
         + json.dumps(texts, ensure_ascii=False)
     )
     payload = {
@@ -1702,7 +1764,11 @@ def build_message_parts(article: dict, blocks) -> list:
     # 头部元信息压成两行: 原来作者/时间/链接各占一行, 头部比正文还长
     parts.append(f"**作者**：{AUTHOR_NAME}｜**发布时间**：{pub_bj}（{tz_display}）")
     # 原文链接: 配图不展示时, 这是读者看图的唯一入口
-    parts.append(f"**原文链接**：{original_link(article)}")
+    # 明文网址在客户端不一定被识别成可点链接(2026-10-06 用户反馈公告里的链接点不开);
+    # 这里可见文字仍是完整网址(方便复制/核对), 但套上 markdown 链接外壳 ——
+    # [文字](URL) 是黑盒实测可渲染的写法, 点一下就能跳。
+    link = original_link(article)
+    parts.append(f"**原文链接**：[{link}]({link})")
     cover = img_line(normalize_img_url(article.get("imageThumbnail") or ""), "查看封面图")
     if cover:
         parts.append(cover)
@@ -2088,7 +2154,9 @@ def main():
             continue
 
         # 解析 + 翻译 + 排版
-        blocks = classify_blocks(parse_body(detail.get("body") or ""))
+        # link_base=原文链接: 正文里的页内锚点(#小节)要补成"原文链接#小节"才有可跳转的页面
+        blocks = classify_blocks(
+            parse_body(detail.get("body") or "", original_link(article)))
         if not blocks:
             print(f"[warn] id={sid} 正文解析后无文本块(可能为纯图片公告), 跳过推送", flush=True)
             continue
@@ -2411,6 +2479,34 @@ def self_test() -> bool:
         '<p><a href="https://n.nexon.com/x"><strong>Hot Time</strong></a></p>')
     check("链接内粗体标记不泄漏", bold_link[0][1] == "[Hot Time](https://n.nexon.com/x)")
 
+    # 页内锚点链接: 原文 <a href="#petUtility">Water of Life</a> 是官网页面内跳转,
+    # 旧版直接转 [文字](#petUtility) -> 黑盒里点不动(2026-10-06 用户反馈 45819 实测)。
+    anchor_base = "https://www.nexon.com/maplestory/news/sale/45819"
+    anchor_blk = parse_body(
+        '<p>Pet duration can be extended with <strong>'
+        '<a href="#petUtility">Water of Life</a></strong>.</p>', anchor_base)
+    check("页内锚点补成 原文链接#小节",
+          anchor_blk[0][1] == "Pet duration can be extended with "
+                            f"**[Water of Life]({anchor_base}#petUtility)**.")
+    check("无原文链接时页内锚点退回纯文本(不推死链接)",
+          parse_body('<p>Extend with <a href="#petUtility">Water of Life</a>.</p>')[0][1]
+          == "Extend with Water of Life.")
+
+    # 划线价(删除线): 公告 45819 "Founder's Access Cash Shop" 原文是
+    # <li>Price (3): <span style="text-decoration: line-through;">1,050 NX</span>
+    # <span style="color: #ff6600;">1,000 NX</span></li>
+    # 旧版把 <span> 当未知标签整个丢掉 -> 推送里成了 "1,050 NX 1,000 NX"。
+    # 黑盒语音是否渲染 ~~ 未实测, 所以用 "→" 表达"原价 -> 现价"(2026-10-06 改)。
+    strike_blk = parse_body(
+        '<ul><li>Price (3): <span style="text-decoration: line-through;">1,050 NX</span>'
+        ' <span style="color: #ff6600;">1,000 NX</span></li></ul>')
+    check("划线价转 原价 → 现价(45819 实测)",
+          strike_blk[0][1][0][0] == "Price (3): 1,050 NX → 1,000 NX")
+    check("<s> 删除线同样处理, 且无现价时不留悬空箭头",
+          parse_body("<p>Event <s>ended</s></p>")[0][1] == "Event ended")
+    check("普通 span(color) 不产生箭头",
+          parse_body('<p><span style="color: #ff6600;">350 NX</span></p>')[0][1] == "350 NX")
+
     # 结尾署名固定译法(纯本地逻辑, 不触发翻译网络请求)
     sig_blocks, _ = translate_blocks(
         [("para", "Thank you,"), ("para", "The MapleStory Team")], None)
@@ -2558,6 +2654,10 @@ def self_test() -> bool:
     check("标题独占首行", bp[0] == "# 测试公告")
     check("头部元信息压成一行(作者+发布时间)",
           "**作者**：" in bp[1] and "**发布时间**：" in bp[1] and "｜" in bp[1])
+    header_link = next((p for p in bp if p.startswith("**原文链接**：")), "")
+    check("头部原文链接写成可点 markdown 链接(可见文字仍是网址)",
+          re.fullmatch(r"\*\*原文链接\*\*：\[(https?://[^\]]+)\]\(\1\)", header_link)
+          is not None)
     check("伪小标题降为整行粗体(不再抢 ## 层级)",
           "**小节标题**" in bp and all(not p.startswith("## ") for p in bp))
     check("正文重复分隔线只留一条", sum(1 for p in bp if p == DIVIDER) == 2)   # 头部 1 + 正文 1
