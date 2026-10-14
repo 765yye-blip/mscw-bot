@@ -1,8 +1,8 @@
 {
-  "pushed_id": "46321",
-  "pushed_hash": "2721b0996bf84581",
-  "pushed_at": "2026-10-08 21:47:10",
-  "title": "Unscheduled Maintenance - October 8, 2026",
+  "pushed_id": "46523",
+  "pushed_hash": "e818f32466eab7a2",
+  "pushed_at": "2026-10-14 10:47:10",
+  "title": "Scheduled Minor Patch Maintenance - October 15, 2026",
   "tr_cache": {
     "October 6, 2026 6:00 PM UTC⟦BJ1⟧": "2026年10月6日 下午6:00 UTC⟦BJ1⟧",
     "各位冒险家，你们好！Welcome to the Global 冒险岛怀旧服 Founder’s Access! Whether you’re revisiting old favorites or experiencing 冒险岛 for the first time, this is your chance to create a 角色, find your community, and make memories that last. From casual exploration to epic boss battles, there’s a place for every kind of 冒险家.": "各位冒险家，你们好！欢迎来到全球版冒险岛怀旧服创始人资格！无论你是重温旧日所爱，还是第一次体验冒险岛，这都是你创建角色、找到自己的社群、留下长久回忆的机会。从休闲探索到史诗级首领战，每一位冒险家都能找到属于自己的位置。",
@@ -151,7 +151,8 @@
     "45621": "caeab07120e27e53",
     "45819": "df7c275a88f5fc67",
     "45490": "d0fd3696678caba5",
-    "46321": "2721b0996bf84581"
+    "46321": "2721b0996bf84581",
+    "46523": "e818f32466eab7a2"
   },
   "last_live_date": {
     "44134": "2026-09-02T16:45:00Z",
@@ -165,7 +166,8 @@
     "45621": "2026-10-03T13:30:00Z",
     "45819": "2026-10-05T19:55:07Z",
     "45490": "2026-10-06T16:19:00Z",
-    "46321": "2026-10-08T05:00:00Z"
+    "46321": "2026-10-08T05:00:00Z",
+    "46523": "2026-10-13T19:30:48Z"
   },
-  "push_lag_min": 527
+  "push_lag_min": 436
 }
