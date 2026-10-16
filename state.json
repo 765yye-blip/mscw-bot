@@ -1,8 +1,8 @@
 {
-  "pushed_id": "46523",
-  "pushed_hash": "f2475e2ab7f8a969",
-  "pushed_at": "2026-10-16 02:02:33",
-  "title": "[Completed] Scheduled Minor Patch Maintenance - October 15, 2026",
+  "pushed_id": "46730",
+  "pushed_hash": "1f67f1cd322fbb34",
+  "pushed_at": "2026-10-17 05:02:29",
+  "title": "Changes to Megaphone Level Requirements Notice",
   "tr_cache": {
     "October 6, 2026 6:00 PM UTC⟦BJ1⟧": "2026年10月6日 下午6:00 UTC⟦BJ1⟧",
     "各位冒险家，你们好！Welcome to the Global 冒险岛怀旧服 Founder’s Access! Whether you’re revisiting old favorites or experiencing 冒险岛 for the first time, this is your chance to create a 角色, find your community, and make memories that last. From casual exploration to epic boss battles, there’s a place for every kind of 冒险家.": "各位冒险家，你们好！欢迎来到全球版冒险岛怀旧服创始人资格！无论你是重温旧日所爱，还是第一次体验冒险岛，这都是你创建角色、找到自己的社群、留下长久回忆的机会。从休闲探索到史诗级首领战，每一位冒险家都能找到属于自己的位置。",
@@ -136,7 +136,32 @@
     "Resolved an issue where the effective healing distance of 牧师's 治愈术 skill was wider than intended.": "修复了牧师的治疗术技能有效治疗距离比预期更远的问题。",
     "Resolved an issue where 牧师's 治愈术 skill could still be used without enough MP.": "修复了牧师在 MP 不足时仍可使用治愈术技能的问题。",
     "Resolved an issue where some players were unable to connect to Channels 1, 2, 3, and 4.": "修复了部分玩家无法连接到频道 1、2、3 和 4 的问题。",
-    "Unscheduled 维护 - October 8, 2026": "临时维护 - 2026年10月8日"
+    "Unscheduled 维护 - October 8, 2026": "临时维护 - 2026年10月8日",
+    "Starting on **October 21, 2026 at 6:00 PM UTC⟦BJ1⟧ (after Grand Launch)**, the level requirement to use all 广播喇叭 items will increase from **Lv. 10** to **Lv. 15**. Existing 广播喇叭 items that you already have in your 背包 will not be affected.": "从 **2026年10月21日协调世界时下午6:00⟦BJ1⟧ (盛大上线后)** 起，使用所有广播喇叭道具的等级要求将从 **等级 10** 提高到 **等级 15**。你已放在背包中的现有广播喇叭道具将不受影响。",
+    "广播喇叭 Level Requirements": "广播喇叭等级要求",
+    "(Before Grand Launch)": "(盛大上线前)",
+    "(After Grand Launch)": "(盛大上线后)",
+    "**Lv. 10**": "**10级**",
+    "**Lv. 15**": "**15级**",
+    "Super 广播喇叭": "高级广播喇叭",
+    "Item 广播喇叭": "道具广播喇叭",
+    "Double Item 广播喇叭": "双倍道具广播喇叭",
+    "How Existing Items & Coupons Will Be Handled": "现有物品与优惠券的处理方式",
+    "Monthly Essentials": "每月必备品",
+    "Includes: 20 广播喇叭 Exchange Coupons (30-day duration) & 5 Double Item 广播喇叭 Exchange Coupons (30-day duration).": "包含：20张广播喇叭交换券（有效期30天）和5张双倍道具广播喇叭交换券（有效期30天）。",
+    "If the **20 广播喇叭 Exchange Coupons** are used **before** Grand Launch, you will receive Megaphones with a **Lv. 10** requirement.": "如果**20张广播喇叭交换券**在正式上线**之前**使用，你将获得要求等级为**10级**的广播喇叭。",
+    "If the **20 广播喇叭 Exchange Coupons** are used **after** Grand Launch, you will receive Megaphones with a **Lv. 15** requirement.": "如果**20张广播喇叭交换券**在正式上线**之后**使用，你将获得要求等级为**15级**的广播喇叭。",
+    "If the **5 Double Item 广播喇叭 Exchange Coupons** are used **before** Grand Launch, you will receive Double Item Megaphones with a **Lv. 10** requirement.": "如果在正式上线**前**使用 **5 张双倍道具广播喇叭兑换券**，你将获得等级要求为 **Lv. 10** 的双倍道具喇叭。",
+    "If the **5 Double Item 广播喇叭 Exchange Coupons** are used **after** Grand Launch, you will receive Double Item Megaphones with a **Lv. 15** requirement.": "如果在正式上线**后**使用 **5 张双倍道具广播喇叭兑换券**，你将获得等级要求为 **Lv. 15** 的双倍道具喇叭。",
+    "Convenience Essentials Pack": "便利实用礼包",
+    "Includes: 10 Super 广播喇叭 Exchange Coupons (90-day duration)": "包含：10 张超级广播喇叭兑换券（有效期 90 天）",
+    "If the **10 Super 广播喇叭 Exchange Coupons** are used **before** Grand Launch, you will receive Super Megaphones with a **Lv. 10** requirement.": "如果在正式上线**前**使用 **10 张超级广播喇叭兑换券**，你将获得等级要求为 **Lv. 10** 的超级喇叭。",
+    "If the **10 Super 广播喇叭 Exchange Coupons** are used **after** Grand Launch, you will receive Super Megaphones with a **Lv. 15** requirement.": "如果在正式上线**后**使用 **10 张超级广播喇叭兑换券**，你将获得等级要求为 **Lv. 15** 的超级喇叭。",
+    "广播喇叭 Items Sold Individually or in Bundles": "广播喇叭道具可单独购买，也可打包购买",
+    "All 广播喇叭 items purchased from the 商城 **before** Grand Launch will have a **Lv. 10** requirement.": "所有在正式上线**前**从商城购买的广播喇叭道具，等级要求均为 **Lv. 10**。",
+    "All 广播喇叭 items purchased from the 商城 **after** Grand Launch will have a **Lv. 15** requirement.": "所有在正式上线**后**从商城购买的广播喇叭道具，等级要求均为 **Lv. 15**。",
+    "All 广播喇叭 item rewards given from events **after** Grand Launch will have a **Lv. 15** requirement.": "正式上线**后**由活动发放的所有广播喇叭道具奖励，等级要求均为 **Lv. 15**。",
+    "Changes to 广播喇叭 Level Requirements Notice": "关于广播喇叭等级要求变更的公告"
   },
   "tr_cache_ver": "1152-8a2f88e67d36",
   "pushed_map": {
@@ -152,7 +177,8 @@
     "45819": "df7c275a88f5fc67",
     "45490": "d0fd3696678caba5",
     "46321": "2721b0996bf84581",
-    "46523": "f2475e2ab7f8a969"
+    "46523": "f2475e2ab7f8a969",
+    "46730": "1f67f1cd322fbb34"
   },
   "last_live_date": {
     "44134": "2026-09-02T16:45:00Z",
@@ -167,7 +193,8 @@
     "45819": "2026-10-05T19:55:07Z",
     "45490": "2026-10-06T16:19:00Z",
     "46321": "2026-10-08T05:00:00Z",
-    "46523": "2026-10-15T10:55:48Z"
+    "46523": "2026-10-15T10:55:48Z",
+    "46730": "2026-10-16T14:00:00Z"
   },
-  "push_lag_min": 427
+  "push_lag_min": 422
 }
