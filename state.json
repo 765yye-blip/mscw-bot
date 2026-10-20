@@ -1,8 +1,8 @@
 {
-  "pushed_id": "46730",
-  "pushed_hash": "1f67f1cd322fbb34",
-  "pushed_at": "2026-10-17 05:02:29",
-  "title": "Changes to Megaphone Level Requirements Notice",
+  "pushed_id": "46800",
+  "pushed_hash": "d02ae666ebb7cdde",
+  "pushed_at": "2026-10-20 10:22:02",
+  "title": "Scheduled Grand Launch - October 21, 2026",
   "tr_cache": {
     "October 6, 2026 6:00 PM UTC⟦BJ1⟧": "2026年10月6日 下午6:00 UTC⟦BJ1⟧",
     "各位冒险家，你们好！Welcome to the Global 冒险岛怀旧服 Founder’s Access! Whether you’re revisiting old favorites or experiencing 冒险岛 for the first time, this is your chance to create a 角色, find your community, and make memories that last. From casual exploration to epic boss battles, there’s a place for every kind of 冒险家.": "各位冒险家，你们好！欢迎来到全球版冒险岛怀旧服创始人资格！无论你是重温旧日所爱，还是第一次体验冒险岛，这都是你创建角色、找到自己的社群、留下长久回忆的机会。从休闲探索到史诗级首领战，每一位冒险家都能找到属于自己的位置。",
@@ -161,7 +161,14 @@
     "All 广播喇叭 items purchased from the 商城 **before** Grand Launch will have a **Lv. 10** requirement.": "所有在正式上线**前**从商城购买的广播喇叭道具，等级要求均为 **Lv. 10**。",
     "All 广播喇叭 items purchased from the 商城 **after** Grand Launch will have a **Lv. 15** requirement.": "所有在正式上线**后**从商城购买的广播喇叭道具，等级要求均为 **Lv. 15**。",
     "All 广播喇叭 item rewards given from events **after** Grand Launch will have a **Lv. 15** requirement.": "正式上线**后**由活动发放的所有广播喇叭道具奖励，等级要求均为 **Lv. 15**。",
-    "Changes to 广播喇叭 Level Requirements Notice": "关于广播喇叭等级要求变更的公告"
+    "Changes to 广播喇叭 Level Requirements Notice": "关于广播喇叭等级要求变更的公告",
+    "We will be performing a scheduled 维护 starting on **Wednesday, October 21, 2026** at 6:00 AM PDT⟦BJ1⟧ (9:00 AM EDT⟦BJ2⟧ / 3:00 PM CEST⟦BJ3⟧ / 12:00 AM AEDT October 22). **We anticipate the 维护 to last approximately **5** **hours, concluding around **11:00** AM** PDT (2:00 PM EDT⟦BJ4⟧ / 8:00 PM CEST⟦BJ5⟧ / 5:00 AM AEDT October 22)**.": "我们将于 **2026年10月21日（周三）** 太平洋夏令时上午6:00开始进行预定维护⟦BJ1⟧（美国东部夏令时上午9:00⟦BJ2⟧ / 中欧夏令时下午3:00⟦BJ3⟧ / 澳大利亚东部夏令时10月22日凌晨12:00）。**我们预计维护将持续大约 **5** **小时，于太平洋夏令时**上午11:00**左右结束**（美国东部夏令时下午2:00⟦BJ4⟧ / 中欧夏令时晚上8:00⟦BJ5⟧ / 澳大利亚东部夏令时10月22日凌晨5:00）**。",
+    "**Wednesday, October 21, 2026": "**2026年10月21日（周三）",
+    "冒险岛怀旧服 will be updated to** v.1.0.0.**": "冒险岛怀旧服将更新至** v.1.0.0.**",
+    "Monthly Windows 更新.**\n**": "每月 Windows 更新。**\n**",
+    "Grand Launch release notes will be available soon!": "盛大上线版本更新说明即将发布！",
+    "Additional details on changes and updates will be posted here after 维护 is complete.": "维护完成后，有关改动和更新的更多详情将在此处发布。",
+    "Scheduled Grand Launch - October 21, 2026": "预定盛大上线 - 2026年10月21日"
   },
   "tr_cache_ver": "1152-8a2f88e67d36",
   "pushed_map": {
@@ -178,7 +185,8 @@
     "45490": "d0fd3696678caba5",
     "46321": "2721b0996bf84581",
     "46523": "f2475e2ab7f8a969",
-    "46730": "1f67f1cd322fbb34"
+    "46730": "1f67f1cd322fbb34",
+    "46800": "d02ae666ebb7cdde"
   },
   "last_live_date": {
     "44134": "2026-09-02T16:45:00Z",
@@ -194,7 +202,8 @@
     "45490": "2026-10-06T16:19:00Z",
     "46321": "2026-10-08T05:00:00Z",
     "46523": "2026-10-15T10:55:48Z",
-    "46730": "2026-10-16T14:00:00Z"
+    "46730": "2026-10-16T14:00:00Z",
+    "46800": "2026-10-19T19:00:23Z"
   },
-  "push_lag_min": 422
+  "push_lag_min": 442
 }
