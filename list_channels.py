@@ -53,13 +53,26 @@ def main() -> int:
         print(f"[error] 房间列表查询失败: {e}", flush=True)
         return 1
     rooms = ((data.get("result") or {}).get("rooms") or [])
-    print(f"== 机器人已加入 {len(rooms)} 个房间 ==", flush=True)
+    print(f"== 机器人已加入 {len(rooms)} 个房间 ==")
+    print(f"[debug] joined result keys={list(((data.get('result') or {})).keys())}")
+    print(f"[debug] 原始返回(截断): {json.dumps(data, ensure_ascii=False)[:1200]}")
+    room_ids = []
     for r in rooms:
-        print(f"ROOM id={r.get('room_id')} name={r.get('room_name')!r}", flush=True)
+        if isinstance(r, dict):
+            print(f"ROOM id={r.get('room_id')} name={r.get('room_name')!r}", flush=True)
+            room_ids.append(str(r.get("room_id")))
+        else:
+            print(f"ROOM? {r!r}", flush=True)
+            room_ids.append(str(r))
+    if not room_ids:
+        room_ids = [str(x) for x in (os.environ.get("ROOM_ID", "").split(",")) if x.strip()]
 
     only = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("ROOM_ID", "")
-    targets = [r.get("room_id") for r in rooms if not only or str(r.get("room_id")) == str(only)]
+    targets = [rid for rid in room_ids if not only or rid == str(only)]
     for rid in targets:
+        if not rid.isdigit():
+            print(f"[warn] 跳过非数字房间 id: {rid!r}", flush=True)
+            continue
         print(f"\n== 房间 {rid} 的频道 ==", flush=True)
         try:
             view = req("/chatroom/v2/room/view", {"room_id": rid})
