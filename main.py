@@ -1652,6 +1652,13 @@ def translate_blocks(blocks, state=None, title_texts=None):
 # 网页锚点等噪音行（直接丢弃）
 _NOISE_LINE_RE = re.compile(r"^(back\s*to\s*top|top)$", re.IGNORECASE)
 
+# 只有标记、没有内容的行（「1.」「(2)」「3、」「①」、「•」「–」等）。官网公告常用 <br> 折行写伪列表，
+# 排版时把标记行与其下一行合并成「1. 正文」/「• 正文」，不要让它单独占一行。裸数字不合并，避免误伤表格数值。
+_MARK_ONLY_RE = re.compile(
+    r"^(?:[\(（]\d{1,2}[\)）]|\d{1,2}[\.、．\)）]|[\u2460-\u2473]"
+    r"|[•·▪◦‣∙・−\*\-\u2013\u2014])$"
+)
+
 
 # ---- 正文配图 ----
 # 装饰图(页头/背景/图标/分割线)按文件名识别, 不作为配图展示
@@ -1809,10 +1816,27 @@ def build_message_parts(article: dict, blocks) -> list:
                 # 去掉每行首尾悬空的粗体标记, 让每行独立展示
                 lines = [re.sub(r"^\*{2,}", "", l) for l in lines]
                 lines = [re.sub(r"\*{2,}$", "", l) for l in lines]
+            # 段内折行（<br>）只是「同一段落里的换行」，不是独立段落：
+            # 用 Markdown 硬换行（行尾两个空格 + \n）拼成一个 part。
+            # 旧实现是每行单独 append 成一个 part，被 \n\n 连起来后每行之间都空一行，
+            # 于是「1.」独占一行 + 空行 + 正文（2026-10-08 修复）。
+            merged = []
+            pending = ""      # 暂存的纯标记行（编号 / 项目符号），等下一行内容来了合并
             for line in lines:
                 line = line.strip()
-                if line and not _NOISE_LINE_RE.match(line):
-                    parts.append(line)
+                if not line or _NOISE_LINE_RE.match(line):
+                    continue
+                if _MARK_ONLY_RE.match(line):
+                    pending = f"{pending} {line}".strip() if pending else line
+                    continue
+                merged.append(f"{pending} {line}".strip() if pending else line)
+                pending = ""
+            if pending:
+                merged.append(pending)
+            if len(merged) > 1:
+                parts.append("  \n".join(merged))
+            elif merged:
+                parts.append(merged[0])
         elif kind == "list":
             # 列表项打包成一个整体。项间用 Markdown 硬换行(行尾两个空格+\n):
             # 黑盒语音里单 \n 会被当作空格(列表挤成一行), 空行 \n\n 又会被分成独立段落,
