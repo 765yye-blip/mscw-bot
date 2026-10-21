@@ -1,0 +1,65 @@
+name: Push Once
+
+# 手动一次性操作: 列出机器人所在房间/频道, 或把某条公告按最新排版推到指定频道。
+# 只由 workflow_dispatch 触发, 与每 5 分钟的 check-news.yml 完全独立, 不写 state.json。
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "list = 列出房间与频道 / push = 推送一条公告"
+        required: true
+        default: "list"
+      news_id:
+        description: "公告 id（push 模式必填）"
+        required: false
+        default: "46506"
+      room_id:
+        description: "房间 id（留空则用 secrets.ROOM_ID）"
+        required: false
+        default: ""
+      channel_id:
+        description: "频道 id（push 模式必填）"
+        required: false
+        default: ""
+      dry_run:
+        description: "1 = 只排版打印、不推送"
+        required: false
+        default: "0"
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Self-test
+        run: python main.py --self-test
+
+      - name: List rooms and channels
+        if: ${{ github.event.inputs.mode == 'list' }}
+        env:
+          HEYCHAT_TOKEN: ${{ secrets.HEYCHAT_TOKEN }}
+          ROOM_ID: ${{ github.event.inputs.room_id != '' && github.event.inputs.room_id || secrets.ROOM_ID }}
+        run: python list_channels.py
+
+      - name: Push one announcement
+        if: ${{ github.event.inputs.mode == 'push' }}
+        env:
+          HEYCHAT_TOKEN: ${{ secrets.HEYCHAT_TOKEN }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_MODEL: deepseek-v4-flash
+          ROOM_ID: ${{ github.event.inputs.room_id != '' && github.event.inputs.room_id || secrets.ROOM_ID }}
+          CHANNEL_ID: ${{ github.event.inputs.channel_id }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          IMG_STYLE: "off"
+          MAX_IMAGES: "6"
+        run: python push_once.py "${{ github.event.inputs.news_id }}"
