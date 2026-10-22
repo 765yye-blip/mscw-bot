@@ -1,16 +1,9 @@
 {
-  "pushed_id": "46370",
-  "pushed_hash": "0a65a149a02fb1ca",
-  "pushed_at": "2026-10-22 02:05:37",
-  "title": "The Grand Launch of Global MapleStory Classic World!",
+  "pushed_id": "47098",
+  "pushed_hash": "8838f32674a6fc33",
+  "pushed_at": "2026-10-23 03:05:43",
+  "title": "Unscheduled Maintenance - October 22, 2026",
   "tr_cache": {
-    "We recommend preparing your 启动器 for 冒险岛怀旧服 before Grand Launch begins, to ensure you can 进入游戏 the moment servers go live.": "我们建议在盛大公测开始前准备好冒险岛怀旧服的启动器，以确保服务器上线时你能立即进入游戏。",
-    "Nexon 启动器": "Nexon 启动器",
-    "Since the 冒险岛怀旧服 game 客户端 cannot be downloaded until launch day, you can save time by getting your Nexon 启动器 ready right now.": "由于冒险岛怀旧服的游戏客户端要到上线日才能下载，你现在准备好 Nexon 启动器可以节省时间。",
-    "Download and install the official Nexon 启动器 from the Nexon 网页.": "请从 Nexon 网页下载并安装官方 Nexon 启动器。",
-    "Log in with your Nexon account.": "使用你的 Nexon 账号登录。",
-    "On Launch Day: Locate 冒险岛 in your library, select the 冒险岛怀旧服 toggle, and download the standalone 客户端.": "在上线日：在库中找到冒险岛，选择冒险岛怀旧服切换开关，并下载独立客户端。",
-    "Steam": "Steam",
     "Because the games are bundled, having the base game fully installed and updated right now will drastically reduce your required 更新补丁 size when Grand Launch begins.": "由于游戏是捆绑在一起的，现在完整安装并更新基础游戏，将大幅减少盛大公测开始后所需的更新补丁大小。",
     "Open your Steam Library and locate 冒险岛.": "打开你的 Steam 库并找到冒险岛。",
     "Click 'Install' and 选择你的安装磁盘.": "点击“安装”并选择你的安装磁盘。",
@@ -303,7 +296,14 @@
     "Welcome to the Grand Launch of Global 冒险岛怀旧服! Grand Launch comes with Housing in 射手村 and 废弃都市, Grand Launch events, and so much more!": "欢迎来到全球版冒险岛怀旧服的盛大上线！本次上线将带来射手村与废弃都市的房屋系统、上线活动以及更多精彩内容！",
     "Learn more about what's been added in the [Grand Launch Release Notes](https://www.nexon.com/maplestory/news/general/46506/grand-launch-release-notes), then head into 怀旧服 to create your 新手 角色 and step onto the path of the 战士, 魔法师, 弓箭手, or 飞侠! Enjoy 组队 quests, try out the brand-new, exclusive Citizenship and Crafting systems, and more! You can learn more in the [Global 冒险岛怀旧服 FAQ](https://www.nexon.com/maplestory/news/general/45385/global-maple-story-classic-world-faq).": "要了解更多新增内容，请查看[盛大上线发布说明](https://www.nexon.com/maplestory/news/general/46506/grand-launch-release-notes)，然后进入怀旧服创建你的新手角色，踏上战士、魔法师、弓箭手或飞侠之路！享受组队任务，体验全新的专属公民身份与制作系统，以及更多内容！你可以在[全球版冒险岛怀旧服常见问题解答](https://www.nexon.com/maplestory/news/general/45385/global-maple-story-classic-world-faq)中了解更多。",
     "It’s been a long wait, but Global 冒险岛怀旧服 is finally here, and we hope it’s everything you imagined!": "等待已久，但全球版冒险岛怀旧服终于来了，我们希望它如你所想！",
-    "The Grand Launch of Global 冒险岛怀旧服!": "全球版冒险岛怀旧服盛大上线！"
+    "The Grand Launch of Global 冒险岛怀旧服!": "全球版冒险岛怀旧服盛大上线！",
+    "We will be performing an unscheduled 维护 starting on **Thursday, October 22, 2026** at 1:00 PM PDT⟦BJ1⟧ (4:00 PM EDT⟦BJ2⟧ / 10:00 PM CEST⟦BJ3⟧ / 7:00 AM AEDT October 23). **We anticipate the 维护 to last approximately **2** **hours, concluding around **3:00** PM** PDT (6:00 PM EDT⟦BJ4⟧ / 12:00 AM CEST⟦BJ5⟧ October 23 / 9:00 AM AEDT October 23)**.": "我们将于 **2026年10月22日星期四** 太平洋夏令时间下午1:00⟦BJ1⟧（美国东部夏令时间下午4:00⟦BJ2⟧ / 欧洲中部夏令时间晚上10:00⟦BJ3⟧ / 澳大利亚东部夏令时间10月23日上午7:00）开始进行临时维护。**我们预计本次维护将持续约 **2** **小时，预计于太平洋夏令时间下午**3:00** 左右结束（美国东部夏令时间下午6:00⟦BJ4⟧ / 欧洲中部夏令时间10月23日凌晨12:00⟦BJ5⟧ / 澳大利亚东部夏令时间10月23日上午9:00）**。",
+    "**Thursday, October 22, 2026": "**2026年10月22日星期四",
+    "Due to the larger than expected number of players following the Grand Launch, we are implementing additional optimizations and preventative measures to help maintain service stability.": "由于盛大上线后玩家数量超出预期，我们正在实施额外的优化和预防措施，以帮助维持服务稳定。",
+    "Added the Debt System.": "新增债务系统。",
+    "Resolved an issue where the color Green was a selectable option when using the Signature Eye Color Coupon.": "修复了使用签名瞳色券时“绿色”会成为可选项的问题。",
+    "Resolved an issue where accounts that have not met the trade requirements (reaching Lv.15 and waiting 24 hours) could not drop 废弃都市 组队 任务 coupons and passes.": "修复了未满足交易条件（达到15级并等待24小时）的账号无法丢弃废弃都市组队任务票券和通行证的问题。",
+    "Unscheduled 维护 - October 22, 2026": "临时维护 - 2026年10月22日"
   },
   "tr_cache_ver": "1152-8a2f88e67d36",
   "pushed_map": {
@@ -324,7 +324,8 @@
     "46800": "63f3ae1a9c25f233",
     "46362": "012ae10b98f46786",
     "46506": "8b32273400339ffe",
-    "46370": "0a65a149a02fb1ca"
+    "46370": "0a65a149a02fb1ca",
+    "47098": "8838f32674a6fc33"
   },
   "last_live_date": {
     "44134": "2026-09-02T16:45:00Z",
@@ -344,7 +345,8 @@
     "46800": "2026-10-21T10:59:23Z",
     "46362": "2026-10-20T16:00:02Z",
     "46506": "2026-10-20T17:50:48Z",
-    "46370": "2026-10-21T11:00:00Z"
+    "46370": "2026-10-21T11:00:00Z",
+    "47098": "2026-10-22T12:00:22Z"
   },
-  "push_lag_min": 426
+  "push_lag_min": 425
 }
