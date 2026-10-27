@@ -1,8 +1,8 @@
 {
-  "pushed_id": "47102",
-  "pushed_hash": "9b34215adba7b22f",
-  "pushed_at": "2026-10-23 05:18:44",
-  "title": "Introducing the Debt System in MapleStory Classic World",
+  "pushed_id": "46602",
+  "pushed_hash": "9172d0343094da7d",
+  "pushed_at": "2026-10-28 07:28:27",
+  "title": "Classic World Cash Shop Update: Oct. 28",
   "tr_cache": {
     "Mummydog": "木乃伊犬",
     "Skeleton Soldier": "骷髅士兵",
@@ -326,7 +326,8 @@
     "46506": "8b32273400339ffe",
     "46370": "0a65a149a02fb1ca",
     "47098": "8838f32674a6fc33",
-    "47102": "9b34215adba7b22f"
+    "47102": "9b34215adba7b22f",
+    "46602": "9172d0343094da7d"
   },
   "last_live_date": {
     "44134": "2026-09-02T16:45:00Z",
@@ -348,7 +349,8 @@
     "46506": "2026-10-20T17:50:48Z",
     "46370": "2026-10-21T11:00:00Z",
     "47098": "2026-10-22T12:00:22Z",
-    "47102": "2026-10-22T14:00:07Z"
+    "47102": "2026-10-22T14:00:07Z",
+    "46602": "2026-10-27T16:00:00Z"
   },
-  "push_lag_min": 439
+  "push_lag_min": 448
 }
