@@ -1,14 +1,9 @@
 {
-  "pushed_id": "46602",
-  "pushed_hash": "9172d0343094da7d",
-  "pushed_at": "2026-10-28 07:28:27",
-  "title": "Classic World Cash Shop Update: Oct. 28",
+  "pushed_id": "47298",
+  "pushed_hash": "828d08a7cf6ef3ef",
+  "pushed_at": "2026-10-28 12:48:37",
+  "title": "Scheduled Maintenance - October 29, 2026",
   "tr_cache": {
-    "Mummydog": "木乃伊犬",
-    "Skeleton Soldier": "骷髅士兵",
-    "Officer Skeleton": "骷髅军官",
-    "Commander Skeleton": "骷髅指挥官",
-    "Choose Your Job": "选择你的职业",
     "At **Lv. 10**, you can complete your **1st 转职** and choose one of the four jobs: 战士, 魔法师, 弓箭手, or 飞侠. Each offers a different way to fight, so choose one that fits how you want to play!": "在**10级**时，你可以完成**第一次转职**，并从战士、魔法师、弓箭手或飞侠这四个职业中选择一个。每个职业都有不同的战斗方式，因此请选择适合你游玩风格的那个！",
     "At **Lv. 30**, your **2nd 转职** lets you choose a more specialized path and learn new skills.": "在**30级**时，你的**第二次转职**让你可以选择更专精的路线并学习新技能。",
     "The maximum 角色 level is Lv. 100": "角色最高等级为100级",
@@ -303,7 +298,12 @@
     "When all debt has been repaid, all the restricted actions are lifted and the ‘Repay Illegal 金币’ button will be removed.": "当所有债务偿还完毕后，所有受限操作将解除，“偿还非法金币”按钮将被移除。",
     "Our team continues to actively monitor and take action against accounts found engaging in Real Money Trading or other abnormal gameplay activities that violate our [Terms of Service](https://www.nexon.com/main/en/legal/tou). We remain committed to keeping 冒险岛怀旧服 fair and enjoyable for all 冒险家们. Thank you for your understanding and continued support.": "我们的团队会继续积极监控，并对被发现参与真实货币交易或其他违反我们的[服务条款](https://www.nexon.com/main/en/legal/tou)的异常游戏活动的账号采取行动。我们始终致力于让冒险岛怀旧服对所有冒险家们保持公平且充满乐趣。感谢您的理解与持续支持。",
     "- The 冒险岛 Team": "- 冒险岛团队",
-    "Introducing the Debt System in 冒险岛怀旧服": "冒险岛怀旧服债务系统介绍"
+    "Introducing the Debt System in 冒险岛怀旧服": "冒险岛怀旧服债务系统介绍",
+    "We will be performing a scheduled 维护 starting on **Thursday, October 29, 2026** at 5:00 AM PDT⟦BJ1⟧ (8:00 AM EDT⟦BJ2⟧ / 1:00 PM CET⟦BJ3⟧ / 11:00 PM AEDT). **We anticipate the 维护 to last approximately **4** **hours, concluding around **9:00** AM** PDT (12:00 PM EDT⟦BJ4⟧ / 5:00 PM CET⟦BJ5⟧ / 3:00 AM AEDT October 30)**.": "我们将于 **2026年10月29日（星期四）** 上午5:00 PDT⟦BJ1⟧（上午8:00 EDT⟦BJ2⟧ / 下午1:00 CET⟦BJ3⟧ / 晚上11:00 AEDT）开始进行计划维护。**我们预计维护将持续约4小时，并将在上午9:00 PDT 左右结束（中午12:00 EDT⟦BJ4⟧ / 下午5:00 CET⟦BJ5⟧ / 10月30日凌晨3:00 AEDT）**。",
+    "**Thursday, October 29, 2026": "**2026年10月29日星期四",
+    "冒险岛怀旧服 will be updated to **v.1.1.0.**": "冒险岛怀旧服将更新至 **v.1.1.0.**",
+    "Full list of changes and updates will be available here once 维护 is completed.": "维护完成后，完整的变更与更新列表将在此处提供。",
+    "Scheduled 维护 - October 29, 2026": "计划维护 - 2026年10月29日"
   },
   "tr_cache_ver": "1152-8a2f88e67d36",
   "pushed_map": {
@@ -327,7 +327,8 @@
     "46370": "0a65a149a02fb1ca",
     "47098": "8838f32674a6fc33",
     "47102": "9b34215adba7b22f",
-    "46602": "9172d0343094da7d"
+    "46602": "9172d0343094da7d",
+    "47298": "828d08a7cf6ef3ef"
   },
   "last_live_date": {
     "44134": "2026-09-02T16:45:00Z",
@@ -350,7 +351,8 @@
     "46370": "2026-10-21T11:00:00Z",
     "47098": "2026-10-22T12:00:22Z",
     "47102": "2026-10-22T14:00:07Z",
-    "46602": "2026-10-27T16:00:00Z"
+    "46602": "2026-10-27T16:00:00Z",
+    "47298": "2026-10-27T21:41:47Z"
   },
-  "push_lag_min": 448
+  "push_lag_min": 427
 }
