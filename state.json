@@ -1,15 +1,17 @@
 {
   "pushed_id": "47370",
-  "pushed_hash": "aca8f34261934ee2",
-  "pushed_at": "2026-10-31 05:00:53",
-  "title": "Unscheduled Emergency Maintenance - October 30, 2026",
+  "pushed_hash": "a5c3619648c6651e",
+  "pushed_at": "2026-10-31 07:25:30",
+  "title": "[Completed] Unscheduled Emergency Maintenance - October 30, 2026",
   "tr_cache": {
     "We are experiencing an unexpected issue and will be taking our game servers 服务器离线 for an unscheduled emergency 维护 today. We are actively working hard to resolve this as quickly as possible and will provide more updates and information when we can.": "我们遇到了意外问题，今天将让游戏服务器进入服务器离线状态，进行计划外的紧急维护。我们正在积极努力尽快解决此问题，并会在可能时提供更多更新和信息。",
     "The 维护 will begin on **Friday, October 30, 2026** at 3:00 PM PDT⟦BJ1⟧ (6:00 PM EDT⟦BJ2⟧ / 11:00 PM CET⟦BJ3⟧ / 9:00 AM AEDT October 31). **We anticipate the 维护 to last approximately **2** **hours, concluding around **5:00** PM** PDT (8:00 PM EDT⟦BJ4⟧ / 1:00 AM CET⟦BJ5⟧ October 31 / 11:00 AM AEDT October 31)**.": "维护将于 **2026年10月30日星期五** 太平洋夏令时间下午3:00⟦BJ1⟧（美国东部夏令时间下午6:00⟦BJ2⟧ / 中欧时间晚上11:00⟦BJ3⟧ / 澳大利亚东部夏令时间10月31日上午9:00）开始。**我们预计维护将持续约 **2** **小时，于 **下午5:00** PDT 左右结束（美国东部夏令时间晚上8:00⟦BJ4⟧ / 中欧时间10月31日凌晨1:00⟦BJ5⟧ / 澳大利亚东部夏令时间10月31日上午11:00）**。",
     "**Friday, October 30, 2026": "**2026年10月30日星期五",
     "All 冒险岛怀旧服 game servers.": "所有冒险岛怀旧服游戏服务器。",
     "We apologize for any inconvenience this issue may have caused and thank you for your patience and understanding.": "对于此问题可能造成的任何不便，我们深表歉意，并感谢您的耐心与理解。",
-    "Unscheduled Emergency 维护 - October 30, 2026": "计划外紧急维护 - 2026年10月30日"
+    "Unscheduled Emergency 维护 - October 30, 2026": "计划外紧急维护 - 2026年10月30日",
+    "**[Updated 10/30 at 4:25 PM PDT⟦BJ1⟧] **The 维护 has been completed and we have extended 商城 items in your 背包 for 2 hours. Please 重启 your Nexon 启动器 or Steam to ensure you receive the latest 客户端 更新.": "**[更新于 10/30 下午4:25 太平洋夏令时⟦BJ1⟧] **维护已完成，我们已将您背包中的商城道具延长 2 小时。请重启您的 Nexon 启动器或 Steam，以确保您收到最新的客户端更新。",
+    "[Completed] Unscheduled Emergency 维护 - October 30, 2026": "[已完成] 计划外紧急维护 - 2026年10月30日"
   },
   "tr_cache_ver": "1164-fb8d5527099f",
   "pushed_map": {
@@ -35,7 +37,7 @@
     "47102": "9b34215adba7b22f",
     "46602": "9172d0343094da7d",
     "47298": "183f9b5c6385503d",
-    "47370": "aca8f34261934ee2"
+    "47370": "a5c3619648c6651e"
   },
   "last_live_date": {
     "44134": "2026-09-02T16:45:00Z",
@@ -60,7 +62,7 @@
     "47102": "2026-10-22T14:00:07Z",
     "46602": "2026-10-27T16:00:00Z",
     "47298": "2026-10-29T08:00:47Z",
-    "47370": "2026-10-30T14:00:03Z"
+    "47370": "2026-10-30T16:00:03Z"
   },
-  "push_lag_min": 421
+  "push_lag_min": 445
 }
